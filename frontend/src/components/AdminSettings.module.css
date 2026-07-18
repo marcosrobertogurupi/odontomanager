@@ -1,0 +1,149 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.titleSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+}
+
+.subtitle {
+  color: hsl(var(--text-muted));
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.listItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px;
+  border-radius: var(--radius-xs);
+  border: 1px solid hsl(var(--border-color));
+  background-color: hsl(var(--bg-app));
+}
+
+.itemInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.itemName {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+}
+
+.itemDesc {
+  font-size: 12px;
+  color: hsl(var(--text-muted));
+}
+
+.itemValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px dashed hsl(var(--border-color));
+  padding-top: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroup label {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--text-muted));
+}
+
+.input {
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  padding: 10px 14px;
+  background-color: hsl(var(--bg-app));
+  outline: none;
+  font-size: 14px;
+  transition: var(--transition-fast);
+}
+
+.input:focus {
+  border-color: hsl(var(--primary));
+}
+
+.actionBtn {
+  background-color: hsl(var(--primary));
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: var(--transition-fast);
+  margin-top: 10px;
+}
+
+.actionBtn:hover {
+  background-color: hsl(var(--primary-hover));
+}

@@ -1,0 +1,21 @@
+# Node.js
+**/node_modules
+**/dist
+**/build
+**/.tmp
+
+# Environment variables
+**/.env
+**/.env.local
+**/.env.*.local
+
+# IDEs/System files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db

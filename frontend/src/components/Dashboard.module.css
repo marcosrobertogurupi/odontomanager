@@ -1,0 +1,258 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.titleSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.welcomeTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+}
+
+.subtitle {
+  color: hsl(var(--text-muted));
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.statCard {
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: var(--transition-smooth);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.statCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: hsl(var(--primary));
+}
+
+.statIconContainer {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+  line-height: 1.1;
+}
+
+.statLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--text-muted));
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activityItem {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid hsl(var(--border-color));
+}
+
+.activityItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.activityDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.activityContent {
+  flex: 1;
+}
+
+.activityText {
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--text-main));
+}
+
+.activityTime {
+  font-size: 12px;
+  color: hsl(var(--text-muted));
+  margin-top: 4px;
+}
+
+.noticeBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.noticeItem {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid hsl(var(--border-color));
+  background-color: hsl(var(--bg-app));
+}
+
+.noticeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.noticeTag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+
+.noticeTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+}
+
+.noticeBody {
+  font-size: 13px;
+  color: hsl(var(--text-muted));
+  line-height: 1.4;
+}
+
+/* Gráfico Simulado */
+.chartContainer {
+  height: 240px;
+  border: 1px dashed hsl(var(--border-color));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 20px 40px 10px;
+  position: relative;
+  background-color: hsl(var(--bg-app));
+}
+
+.chartBarContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  justify-content: flex-end;
+  width: 40px;
+}
+
+.chartBar {
+  width: 16px;
+  border-radius: 4px 4px 0 0;
+  transition: var(--transition-smooth);
+  animation: growBar 0.8s ease-out forwards;
+}
+
+.chartBarIncome {
+  background: linear-gradient(to top, hsl(var(--primary)), hsl(var(--secondary)));
+}
+
+.chartBarExpense {
+  background: linear-gradient(to top, hsl(var(--danger)), #f43f5e);
+}
+
+.chartLabel {
+  font-size: 11px;
+  color: hsl(var(--text-muted));
+  font-weight: 500;
+}
+
+@keyframes growBar {
+  from {
+    height: 0;
+  }
+}
+
+.chartLegend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: hsl(var(--text-muted));
+}
+
+.legendColor {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}

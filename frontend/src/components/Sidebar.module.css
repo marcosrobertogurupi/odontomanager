@@ -1,0 +1,123 @@
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background-color: hsl(var(--bg-sidebar));
+  border-right: 1px solid hsl(var(--border-color));
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  transition: var(--transition-smooth);
+  z-index: 100;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.collapsed {
+  width: 80px;
+}
+
+.header {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid hsl(var(--border-color));
+  gap: 12px;
+  overflow: hidden;
+}
+
+.logoIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+}
+
+.logoText {
+  font-size: 20px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+  white-space: nowrap;
+  letter-spacing: -0.5px;
+  transition: var(--transition-smooth);
+}
+
+.navSection {
+  flex: 1;
+  padding: 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  color: hsl(var(--text-muted));
+  cursor: pointer;
+  transition: var(--transition-fast);
+  gap: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.navItem:hover {
+  background-color: hsl(var(--bg-app));
+  color: hsl(var(--text-main));
+}
+
+.active {
+  background-color: hsl(var(--primary-light));
+  color: hsl(var(--primary));
+}
+
+.active:hover {
+  background-color: hsl(var(--primary-light));
+  color: hsl(var(--primary));
+}
+
+.navLabel {
+  transition: var(--transition-smooth);
+}
+
+.footer {
+  padding: 16px;
+  border-top: 1px solid hsl(var(--border-color));
+  display: flex;
+  justify-content: center;
+}
+
+.toggleButton {
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--radius-xs);
+  border: 1px solid hsl(var(--border-color));
+  background-color: transparent;
+  color: hsl(var(--text-muted));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: var(--transition-fast);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.toggleButton:hover {
+  background-color: hsl(var(--bg-app));
+  color: hsl(var(--text-main));
+}

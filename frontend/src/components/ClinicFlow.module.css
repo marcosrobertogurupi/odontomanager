@@ -1,0 +1,201 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.titleSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+}
+
+.subtitle {
+  color: hsl(var(--text-muted));
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.flowGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  height: calc(100vh - 240px);
+  min-height: 500px;
+}
+
+@media (max-width: 1024px) {
+  .flowGrid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+.column {
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  overflow-y: auto;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 2px solid hsl(var(--border-color));
+}
+
+.columnTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.columnCount {
+  font-size: 12px;
+  font-weight: 600;
+  background-color: hsl(var(--bg-app));
+  color: hsl(var(--text-muted));
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid hsl(var(--border-color));
+}
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.patientCard {
+  background-color: hsl(var(--bg-app));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: var(--transition-smooth);
+}
+
+.patientCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: hsl(var(--primary));
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.patientName {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+}
+
+.timeInfo {
+  font-size: 11px;
+  color: hsl(var(--text-muted));
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dentistName {
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--text-muted));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roomTag {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: hsl(var(--primary-light));
+  color: hsl(var(--primary));
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.cardActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px dashed hsl(var(--border-color));
+  padding-top: 10px;
+}
+
+.actionBtn {
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: var(--transition-fast);
+  color: hsl(var(--text-muted));
+}
+
+.actionBtn:hover {
+  background-color: hsl(var(--primary-light));
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+.nextBtn {
+  background-color: hsl(var(--primary));
+  color: white;
+  border-color: hsl(var(--primary));
+}
+
+.nextBtn:hover {
+  background-color: hsl(var(--primary-hover));
+  color: white;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: hsl(var(--text-muted));
+  font-size: 13px;
+  border: 2px dashed hsl(var(--border-color));
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.02);
+}
