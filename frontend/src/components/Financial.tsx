@@ -9,7 +9,8 @@ import {
   Layers,
   FileText
 } from 'lucide-react';
-import { API_URL } from '../config';
+import { supabase } from '../lib/supabaseClient';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './Financial.module.css';
 
 interface Transaction {
@@ -28,6 +29,7 @@ interface FinancialProps {
 }
 
 export default function Financial({ selectedUnit }: FinancialProps) {
+  const { activeTenant } = useTenant();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState({ income: 0, expense: 0, net: 0 });
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -38,26 +40,42 @@ export default function Financial({ selectedUnit }: FinancialProps) {
   const [formAmount, setFormAmount] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const fetchFinancialData = () => {
-    // Buscar transações
-    fetch(`${API_URL}/api/transactions`)
-      .then(res => res.json())
-      .then(data => setTransactions(data))
-      .catch(err => console.error('Erro ao buscar transações:', err));
+  const fetchFinancialData = async () => {
+    if (!activeTenant || !selectedUnit) return;
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit)
+        .order('date', { ascending: false });
 
-    // Buscar resumo
-    fetch(`${API_URL}/api/transactions/summary`)
-      .then(res => res.json())
-      .then(data => setSummary(data))
-      .catch(err => console.error('Erro ao buscar resumo financeiro:', err));
+      if (error) throw error;
+      setTransactions(data || []);
+
+      // Calcular o resumo das transações da unidade selecionada
+      let income = 0;
+      let expense = 0;
+      (data || []).forEach((tx: any) => {
+        if (tx.type === 'income') income += Number(tx.amount);
+        else if (tx.type === 'expense') expense += Number(tx.amount);
+      });
+
+      setSummary({ income, expense, net: income - expense });
+    } catch (err) {
+      console.error('Erro ao buscar dados financeiros:', err);
+    }
   };
 
   useEffect(() => {
-    fetchFinancialData();
-  }, [selectedUnit]);
+    if (activeTenant && selectedUnit) {
+      fetchFinancialData();
+    }
+  }, [selectedUnit, activeTenant]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeTenant || !selectedUnit) return;
     if (!formDescription || !formAmount) return alert('Preencha os campos obrigatórios.');
 
     const payload = {
@@ -65,25 +83,26 @@ export default function Financial({ selectedUnit }: FinancialProps) {
       type: formType,
       amount: Number(formAmount),
       description: formDescription,
-      date: formDate
+      date: formDate,
+      tenant_id: activeTenant.id
     };
 
-    fetch(`${API_URL}/api/transactions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-      .then(res => res.json())
-      .then(() => {
-        setIsDrawerOpen(false);
-        fetchFinancialData();
-        // Reset
-        setFormDescription('');
-        setFormAmount('');
-      })
-      .catch(err => console.error('Erro ao salvar transação:', err));
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      setIsDrawerOpen(false);
+      fetchFinancialData();
+      // Reset
+      setFormDescription('');
+      setFormAmount('');
+    } catch (err: any) {
+      console.error('Erro ao salvar transação:', err);
+      alert('Erro ao salvar transação: ' + err.message);
+    }
   };
 
   return (

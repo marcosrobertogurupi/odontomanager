@@ -24,6 +24,10 @@ import transactionsRouter from './routes/transactions.js';
 import proceduresRouter from './routes/procedures.js';
 import profilesRouter from './routes/profiles.js';
 import unitsRouter from './routes/units.js';
+import inventoryRouter from './routes/inventory.js';
+import fixedCostsRouter from './routes/fixedCosts.js';
+import bomRouter from './routes/bom.js';
+import reportsRouter from './routes/reports.js';
 
 // Rota de status de saúde
 app.get('/health', (req, res) => {
@@ -36,8 +40,12 @@ app.use('/api/appointments', appointmentsRouter);
 app.use('/api/clinic-flow', clinicFlowRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/procedures', proceduresRouter);
+app.use('/api/procedures', bomRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/units', unitsRouter);
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/fixed-costs', fixedCostsRouter);
+app.use('/api/reports', reportsRouter);
 
 // Tratamento de rotas não encontradas
 app.use((req, res, next) => {

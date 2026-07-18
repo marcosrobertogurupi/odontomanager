@@ -9,7 +9,8 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
-import { API_URL } from '../config';
+import { supabase } from '../lib/supabaseClient';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './Dashboard.module.css';
 
 interface DashboardProps {
@@ -17,6 +18,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ selectedUnit }: DashboardProps) {
+  const { activeTenant } = useTenant();
   const [stats, setStats] = useState({
     appointmentsCount: 0,
     waitingRoomCount: 0,
@@ -27,38 +29,70 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    // 1. Carregar resumo financeiro
-    fetch(`${API_URL}/api/transactions/summary`)
-      .then(res => res.json())
-      .then(data => {
-        setFinancials({ income: data.income || 0, expense: data.expense || 0 });
-      })
-      .catch(err => console.error('Erro ao buscar financeiro:', err));
+    const loadDashboardData = async () => {
+      if (!activeTenant || !selectedUnit) return;
 
-    // 2. Carregar agendamentos de hoje
-    const todayStr = new Date().toISOString().split('T')[0];
-    fetch(`${API_URL}/api/appointments?date=${todayStr}&unit_id=${selectedUnit}`)
-      .then(res => res.json())
-      .then(data => {
+      try {
+        // 1. Carregar resumo financeiro
+        const { data: txs, error: txError } = await supabase
+          .from('transactions')
+          .select('type, amount')
+          .eq('tenant_id', activeTenant.id)
+          .eq('unit_id', selectedUnit);
+
+        if (txError) throw txError;
+
+        let income = 0;
+        let expense = 0;
+        (txs || []).forEach((t: any) => {
+          if (t.type === 'income') income += Number(t.amount);
+          else if (t.type === 'expense') expense += Number(t.amount);
+        });
+        setFinancials({ income, expense });
+
+        // 2. Carregar agendamentos de hoje
+        const todayStr = new Date().toISOString().split('T')[0];
+        const startOfDay = `${todayStr}T00:00:00Z`;
+        const endOfDay = `${todayStr}T23:59:59Z`;
+
+        const { data: appts, error: appError } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('tenant_id', activeTenant.id)
+          .eq('unit_id', selectedUnit)
+          .gte('start_time', startOfDay)
+          .lte('start_time', endOfDay);
+
+        if (appError) throw appError;
+
         setStats(prev => ({
           ...prev,
-          appointmentsCount: data.length || 0
+          appointmentsCount: appts?.length || 0
         }));
-      })
-      .catch(err => console.error('Erro ao buscar agendamentos:', err));
 
-    // 3. Carregar fila de espera ativa
-    fetch(`${API_URL}/api/clinic-flow`)
-      .then(res => res.json())
-      .then(data => {
-        const activeFlow = data.filter((f: any) => f.status === 'waiting' || f.status === 'checked_in');
+        // 3. Carregar fila de espera ativa e atividades recentes
+        const { data: flowData, error: flowError } = await supabase
+          .from('clinic_flow')
+          .select(`
+            *,
+            appointment:appointments!inner(
+              *,
+              patient:patients(*)
+            )
+          `)
+          .eq('tenant_id', activeTenant.id)
+          .eq('appointment.unit_id', selectedUnit)
+          .order('checked_in_at', { ascending: false });
+
+        if (flowError) throw flowError;
+
+        const activeFlow = (flowData || []).filter((f: any) => f.status === 'waiting' || f.status === 'checked_in');
         setStats(prev => ({
           ...prev,
           waitingRoomCount: activeFlow.length || 0
         }));
 
-        // Gerar atividades baseadas no fluxo da clínica
-        const activities = data.map((flowItem: any) => {
+        const activities = (flowData || []).map((flowItem: any) => {
           const patientName = flowItem.appointment?.patient?.name || 'Paciente';
           const time = new Date(flowItem.checked_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
           let text = '';
@@ -81,10 +115,16 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
           return { id: flowItem.id, text, time, color };
         });
         setRecentActivities(activities.slice(0, 5));
-      })
-      .catch(err => console.error('Erro ao buscar fluxo:', err));
 
-  }, [selectedUnit]);
+      } catch (err) {
+        console.error('Erro ao carregar dados do dashboard:', err);
+      }
+    };
+
+    if (activeTenant && selectedUnit) {
+      loadDashboardData();
+    }
+  }, [selectedUnit, activeTenant]);
 
   return (
     <div className={styles.container}>

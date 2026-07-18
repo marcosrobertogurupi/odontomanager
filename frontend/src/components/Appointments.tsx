@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   RefreshCw
 } from 'lucide-react';
-import { API_URL } from '../config';
+import { supabase } from '../lib/supabaseClient';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './Appointments.module.css';
 
 interface AppointmentsProps {
@@ -18,6 +19,7 @@ interface AppointmentsProps {
 }
 
 export default function Appointments({ selectedUnit }: AppointmentsProps) {
+  const { activeTenant } = useTenant();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [dentists, setDentists] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
@@ -34,48 +36,76 @@ export default function Appointments({ selectedUnit }: AppointmentsProps) {
   const [formRoom, setFormRoom] = useState('Consultório A');
   const [formNotes, setFormNotes] = useState('');
 
-  const fetchAppointments = () => {
+  const fetchAppointments = async () => {
+    if (!activeTenant || !selectedUnit) return;
     setLoading(true);
-    let url = `${API_URL}/api/appointments?unit_id=${selectedUnit}`;
-    if (selectedDate) url += `&date=${selectedDate}`;
-    if (selectedDentist) url += `&professional_id=${selectedDentist}`;
+    try {
+      let query = supabase
+        .from('appointments')
+        .select(`
+          *,
+          patient:patients(*),
+          professional:profiles(*),
+          procedure:procedures(*)
+        `)
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit);
 
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        setAppointments(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Erro ao buscar consultas:', err);
-        setLoading(false);
-      });
+      if (selectedDate) {
+        const startOfDay = `${selectedDate}T00:00:00Z`;
+        const endOfDay = `${selectedDate}T23:59:59Z`;
+        query = query.gte('start_time', startOfDay).lte('start_time', endOfDay);
+      }
+
+      if (selectedDentist) {
+        query = query.eq('professional_id', selectedDentist);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setAppointments(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar consultas:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const loadDependencies = () => {
-    // Carregar dentistas
-    fetch(`${API_URL}/api/profiles`)
-      .then(res => res.json())
-      .then(data => {
-        const list = data.filter((p: any) => p.role === 'dentist');
-        setDentists(list);
-      })
-      .catch(err => console.error('Erro ao buscar dentistas:', err));
+  const loadDependencies = async () => {
+    if (!activeTenant) return;
+    try {
+      // Carregar dentistas
+      const { data: dentistData, error: dentistError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('role', 'dentist');
+      if (dentistError) throw dentistError;
+      setDentists(dentistData || []);
 
-    // Carregar pacientes
-    fetch(`${API_URL}/api/patients`)
-      .then(res => res.json())
-      .then(data => setPatients(data))
-      .catch(err => console.error('Erro ao buscar pacientes:', err));
+      // Carregar pacientes
+      const { data: patientData, error: patientError } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .order('name');
+      if (patientError) throw patientError;
+      setPatients(patientData || []);
+    } catch (err) {
+      console.error('Erro ao carregar dependências para agendamentos:', err);
+    }
   };
 
   useEffect(() => {
-    fetchAppointments();
-    loadDependencies();
-  }, [selectedUnit, selectedDate, selectedDentist]);
+    if (activeTenant && selectedUnit) {
+      fetchAppointments();
+      loadDependencies();
+    }
+  }, [selectedUnit, selectedDate, selectedDentist, activeTenant]);
 
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeTenant || !selectedUnit) return;
     if (!formPatient || !formDentist) return alert('Selecione um paciente e um profissional.');
 
     // Montar as datas de início e fim
@@ -92,41 +122,69 @@ export default function Appointments({ selectedUnit }: AppointmentsProps) {
       end_time,
       status: 'scheduled',
       room: formRoom,
-      notes: formNotes
+      notes: formNotes,
+      tenant_id: activeTenant.id
     };
 
-    fetch(`${API_URL}/api/appointments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-      .then(res => res.json())
-      .then(() => {
-        setIsDrawerOpen(false);
-        fetchAppointments();
-        // Reset form
-        setFormPatient('');
-        setFormNotes('');
-      })
-      .catch(err => console.error('Erro ao criar agendamento:', err));
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      setIsDrawerOpen(false);
+      fetchAppointments();
+      // Reset form
+      setFormPatient('');
+      setFormNotes('');
+    } catch (err: any) {
+      console.error('Erro ao criar agendamento:', err);
+      alert('Erro ao criar agendamento: ' + err.message);
+    }
   };
 
-  const handleCheckIn = (appointmentId: string) => {
-    fetch(`${API_URL}/api/clinic-flow/${appointmentId}/status`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ status: 'checked_in' })
-    })
-      .then(res => res.json())
-      .then(() => {
-        alert('Check-in realizado com sucesso! O paciente já aparece na recepção da clínica.');
-        fetchAppointments();
-      })
-      .catch(err => console.error('Erro ao realizar check-in:', err));
+  const handleCheckIn = async (appointmentId: string) => {
+    if (!activeTenant) return;
+    const now = new Date().toISOString();
+
+    try {
+      // 1. Tentar ver se já existe registro de fluxo
+      const { data: existingFlow, error: selectError } = await supabase
+        .from('clinic_flow')
+        .select('*')
+        .eq('appointment_id', appointmentId)
+        .maybeSingle();
+
+      if (selectError) throw selectError;
+
+      if (!existingFlow) {
+        // Criar novo fluxo
+        const { error: insertError } = await supabase
+          .from('clinic_flow')
+          .insert([{
+            appointment_id: appointmentId,
+            status: 'checked_in',
+            checked_in_at: now,
+            tenant_id: activeTenant.id
+          }]);
+        if (insertError) throw insertError;
+      } else {
+        // Atualizar fluxo existente
+        const { error: updateError } = await supabase
+          .from('clinic_flow')
+          .update({ status: 'checked_in', checked_in_at: now })
+          .eq('appointment_id', appointmentId)
+          .eq('tenant_id', activeTenant.id);
+        if (updateError) throw updateError;
+      }
+
+      alert('Check-in realizado com sucesso! O paciente já aparece na recepção da clínica.');
+      fetchAppointments();
+    } catch (err: any) {
+      console.error('Erro ao realizar check-in:', err);
+      alert('Erro ao realizar check-in: ' + err.message);
+    }
   };
 
   const handleGenerateLink = () => {

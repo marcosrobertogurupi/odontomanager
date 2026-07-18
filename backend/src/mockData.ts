@@ -40,6 +40,7 @@ export interface Appointment {
   status: 'scheduled' | 'confirmed' | 'canceled' | 'missed';
   room: string;
   notes?: string;
+  procedure_id?: string | null;
   patient?: Patient;
   professional?: Profile;
 }
@@ -63,6 +64,71 @@ export interface Transaction {
   amount: number;
   description: string;
   date: string;
+}
+
+export interface Insumo {
+  id: string;
+  nome: string;
+  unidade_medida: string;
+  estoque_minimo: number;
+  categoria: string;
+  status: 'ativo' | 'inativo';
+}
+
+export interface EstoqueUnidade {
+  insumo_id: string;
+  unit_id: string;
+  quantidade_atual: number;
+  custo_medio: number;
+}
+
+export interface CompraEstoque {
+  id: string;
+  insumo_id: string;
+  unit_id: string;
+  fornecedor: string;
+  quantidade: number;
+  valor_total: number;
+  valor_unitario: number;
+  data_compra: string;
+  nota_fiscal?: string;
+}
+
+export interface MovimentacaoEstoque {
+  id: string;
+  insumo_id: string;
+  unit_id: string;
+  tipo: 'entrada' | 'saida' | 'ajuste' | 'estorno';
+  quantidade: number;
+  origem: 'compra' | 'procedimento' | 'perda' | 'ajuste_manual';
+  data: string;
+  usuario_id?: string | null;
+}
+
+export interface CustoFixo {
+  id: string;
+  nome: string;
+  tipo: 'fixo_mensal' | 'variavel' | 'recorrente';
+  valor: number;
+  competencia: string; // MM/YYYY
+  unidade_id: string;
+}
+
+export interface ProcedimentoInsumo {
+  procedimento_id: string;
+  insumo_id: string;
+  quantidade_padrao: number;
+  insumo?: Insumo;
+}
+
+export interface ConsumoAtendimento {
+  id: string;
+  appointment_id: string;
+  procedimento_id: string;
+  insumo_id: string;
+  quantidade_usada: number;
+  custo_unitario_no_momento: number;
+  custo_total: number;
 }
 
 export const mockUnits: Unit[] = [
@@ -104,6 +170,7 @@ export const mockAppointments: Appointment[] = [
     status: 'confirmed',
     room: 'Consultório A',
     notes: 'Revisão pós-canal',
+    procedure_id: 'a0000000-0000-0000-0000-000000000003',
     patient: mockPatients[0],
     professional: mockProfiles[0]
   },
@@ -117,6 +184,7 @@ export const mockAppointments: Appointment[] = [
     status: 'confirmed',
     room: 'Consultório A',
     notes: 'Limpeza semestral',
+    procedure_id: 'a0000000-0000-0000-0000-000000000001',
     patient: mockPatients[1],
     professional: mockProfiles[0]
   },
@@ -130,6 +198,7 @@ export const mockAppointments: Appointment[] = [
     status: 'scheduled',
     room: 'Consultório B',
     notes: 'Ajuste de aparelho',
+    procedure_id: null,
     patient: mockPatients[2],
     professional: mockProfiles[1]
   },
@@ -143,6 +212,7 @@ export const mockAppointments: Appointment[] = [
     status: 'confirmed',
     room: 'Consultório B',
     notes: 'Avaliação de implante',
+    procedure_id: 'a0000000-0000-0000-0000-000000000005',
     patient: mockPatients[3],
     professional: mockProfiles[1]
   },
@@ -156,6 +226,7 @@ export const mockAppointments: Appointment[] = [
     status: 'scheduled',
     room: 'Consultório A',
     notes: 'Clareamento moldagem',
+    procedure_id: 'a0000000-0000-0000-0000-000000000004',
     patient: mockPatients[4],
     professional: mockProfiles[0]
   }
@@ -196,3 +267,49 @@ export const mockTransactions: Transaction[] = [
   { id: 'f0000000-0000-0000-0000-000000000002', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', patient_id: null, appointment_id: null, type: 'expense', amount: 450.00, description: 'Compra de insumos descartáveis (Luvas/Máscaras)', date: '2026-07-18' },
   { id: 'f0000000-0000-0000-0000-000000000003', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', patient_id: 'c0000000-0000-0000-0000-000000000004', appointment_id: 'd0000000-0000-0000-0000-000000000004', type: 'income', amount: 2200.00, description: 'Entrada Implante - Roberto Neto', date: '2026-07-18' }
 ];
+
+export const mockInsumos: Insumo[] = [
+  { id: '10000000-0000-0000-0000-000000000001', nome: 'Luva de Procedimento Látex (Par)', unidade_medida: 'unidade', estoque_minimo: 100, categoria: 'Descartáveis', status: 'ativo' },
+  { id: '10000000-0000-0000-0000-000000000002', nome: 'Máscara Descartável Tripla', unidade_medida: 'unidade', estoque_minimo: 50, categoria: 'Descartáveis', status: 'ativo' },
+  { id: '10000000-0000-0000-0000-000000000003', nome: 'Anestésico Mepivacaína 2% (Tubete)', unidade_medida: 'unidade', estoque_minimo: 30, categoria: 'Anestésicos', status: 'ativo' },
+  { id: '10000000-0000-0000-0000-000000000004', nome: 'Resina Composta A2 (Seringa)', unidade_medida: 'unidade', estoque_minimo: 5, categoria: 'Dentística', status: 'ativo' },
+  { id: '10000000-0000-0000-0000-000000000005', nome: 'Agulha Gengival Descartável', unidade_medida: 'unidade', estoque_minimo: 40, categoria: 'Descartáveis', status: 'ativo' }
+];
+
+export const mockEstoqueUnidade: EstoqueUnidade[] = [
+  // Matriz Centro
+  { insumo_id: '10000000-0000-0000-0000-000000000001', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', quantidade_atual: 150, custo_medio: 1.20 },
+  { insumo_id: '10000000-0000-0000-0000-000000000002', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', quantidade_atual: 80, custo_medio: 0.80 },
+  { insumo_id: '10000000-0000-0000-0000-000000000003', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', quantidade_atual: 45, custo_medio: 3.50 },
+  { insumo_id: '10000000-0000-0000-0000-000000000004', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', quantidade_atual: 8, custo_medio: 45.00 },
+  { insumo_id: '10000000-0000-0000-0000-000000000005', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', quantidade_atual: 60, custo_medio: 0.50 },
+  // Filial Jardins
+  { insumo_id: '10000000-0000-0000-0000-000000000001', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098672', quantidade_atual: 120, custo_medio: 1.25 },
+  { insumo_id: '10000000-0000-0000-0000-000000000002', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098672', quantidade_atual: 60, custo_medio: 0.85 }
+];
+
+export const mockComprasEstoque: CompraEstoque[] = [];
+export const mockMovimentacoesEstoque: MovimentacaoEstoque[] = [
+  { id: 'm1', insumo_id: '10000000-0000-0000-0000-000000000001', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', tipo: 'entrada', quantidade: 150, origem: 'ajuste_manual', data: '2026-07-18T08:00:00Z' },
+  { id: 'm2', insumo_id: '10000000-0000-0000-0000-000000000002', unit_id: 'b1f7313d-7938-417e-85fc-fa9ded098671', tipo: 'entrada', quantidade: 80, origem: 'ajuste_manual', data: '2026-07-18T08:00:00Z' }
+];
+
+export const mockCustosFixos: CustoFixo[] = [
+  { id: 'cf1', nome: 'Aluguel Comercial', tipo: 'fixo_mensal', valor: 3500.00, competencia: '07/2026', unidade_id: 'b1f7313d-7938-417e-85fc-fa9ded098671' },
+  { id: 'cf2', nome: 'Energia Elétrica', tipo: 'variavel', valor: 450.00, competencia: '07/2026', unidade_id: 'b1f7313d-7938-417e-85fc-fa9ded098671' },
+  { id: 'cf3', nome: 'Folha de Pagamento (Secretária/Faxina)', tipo: 'recorrente', valor: 2800.00, competencia: '07/2026', unidade_id: 'b1f7313d-7938-417e-85fc-fa9ded098671' }
+];
+
+export const mockProcedimentoInsumos: ProcedimentoInsumo[] = [
+  // Profilaxia (Limpeza): 2 pares de luvas, 1 mascara, 1 anestesico (tubete), 1 agulha
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000001', insumo_id: '10000000-0000-0000-0000-000000000001', quantidade_padrao: 2 },
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000001', insumo_id: '10000000-0000-0000-0000-000000000002', quantidade_padrao: 1 },
+  // Restauração: 2 pares de luvas, 1 mascara, 1 tubete anestesico, 1 agulha, 0.2 resina (20% de uma seringa)
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000002', insumo_id: '10000000-0000-0000-0000-000000000001', quantidade_padrao: 2 },
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000002', insumo_id: '10000000-0000-0000-0000-000000000002', quantidade_padrao: 1 },
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000002', insumo_id: '10000000-0000-0000-0000-000000000003', quantidade_padrao: 1 },
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000002', insumo_id: '10000000-0000-0000-0000-000000000004', quantidade_padrao: 0.2 },
+  { procedimento_id: 'a0000000-0000-0000-0000-000000000002', insumo_id: '10000000-0000-0000-0000-000000000005', quantidade_padrao: 1 }
+];
+
+export const mockConsumoAtendimento: ConsumoAtendimento[] = [];

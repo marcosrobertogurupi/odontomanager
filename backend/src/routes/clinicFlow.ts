@@ -32,14 +32,51 @@ router.get('/', async (req, res, next) => {
 // POST /api/clinic-flow/:appointmentId/status - Atualizar status do paciente na clínica
 router.post('/:appointmentId/status', async (req, res, next) => {
   const { appointmentId } = req.params;
-  const { status } = req.body; // status: checked_in, waiting, in_consultation, checked_out
+  const { status, unit_id, procedure_id, consumos } = req.body; // status: checked_in, waiting, in_consultation, checked_out
 
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const now = new Date().toISOString();
-    
-    // Tenta ver se já existe registro
+
+    // Se for alterado para concluído (checked_out), realiza baixa de estoque transacional
+    if (status === 'checked_out') {
+      if (!unit_id) throw new Error('unit_id is required for checkout');
+
+      if (procedure_id && consumos && consumos.length > 0) {
+        const { error: rpcError } = await supabase.rpc('registrar_consumo_atendimento', {
+          p_appointment_id: appointmentId,
+          p_procedimento_id: procedure_id,
+          p_unit_id: unit_id,
+          p_consumos: consumos
+        });
+        if (rpcError) throw rpcError;
+      }
+
+      // Atualiza status do agendamento para confirmado
+      await supabase
+        .from('appointments')
+        .update({ status: 'confirmed' })
+        .eq('id', appointmentId);
+    } else {
+      // Se for alterado de checked_out para outro status, estorna os insumos
+      const { data: currentFlow } = await supabase
+        .from('clinic_flow')
+        .select('status')
+        .eq('appointment_id', appointmentId)
+        .maybeSingle();
+
+      if (currentFlow && currentFlow.status === 'checked_out') {
+        if (!unit_id) throw new Error('unit_id is required for revert');
+        const { error: revertError } = await supabase.rpc('estornar_consumo_atendimento', {
+          p_appointment_id: appointmentId,
+          p_unit_id: unit_id
+        });
+        if (revertError) throw revertError;
+      }
+    }
+
+    // Tenta ver se já existe registro de fluxo
     const { data: existingFlow } = await supabase
       .from('clinic_flow')
       .select('*')
@@ -83,6 +120,20 @@ router.post('/:appointmentId/status', async (req, res, next) => {
     res.json(result);
   } catch (err) {
     console.warn('[ClinicFlow Route] Atualizando em mock:', (err as Error).message);
+
+    const resolvedUnitId = unit_id || 'b1f7313d-7938-417e-85fc-fa9ded098671';
+    if (status === 'checked_out') {
+      if (procedure_id && consumos) {
+        mockStore.addConsumosAtendimento(appointmentId, resolvedUnitId, procedure_id, consumos);
+      }
+      mockStore.updateAppointment(appointmentId, { status: 'confirmed' });
+    } else {
+      const currentFlow = mockStore.getClinicFlow().find(f => f.appointment_id === appointmentId);
+      if (currentFlow && currentFlow.status === 'checked_out') {
+        mockStore.revertConsumosAtendimento(appointmentId, resolvedUnitId);
+      }
+    }
+
     const updatedFlow = mockStore.updateClinicFlow(appointmentId, status);
     res.json(updatedFlow);
   }

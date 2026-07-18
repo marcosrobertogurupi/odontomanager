@@ -10,7 +10,8 @@ import {
   Mail,
   Calendar
 } from 'lucide-react';
-import { API_URL } from '../config';
+import { supabase } from '../lib/supabaseClient';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './Patients.module.css';
 
 interface Patient {
@@ -28,6 +29,7 @@ interface PatientsProps {
 }
 
 export default function Patients({ searchTerm }: PatientsProps) {
+  const { activeTenant } = useTenant();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -40,20 +42,32 @@ export default function Patients({ searchTerm }: PatientsProps) {
   const [formCpf, setFormCpf] = useState('');
   const [formSatisfaction, setFormSatisfaction] = useState('10.0');
 
-  const fetchPatients = () => {
-    let url = `${API_URL}/api/patients`;
-    if (searchTerm) {
-      url += `?search=${encodeURIComponent(searchTerm)}`;
+  const fetchPatients = async () => {
+    if (!activeTenant) return;
+    try {
+      let query = supabase
+        .from('patients')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .order('name');
+
+      if (searchTerm) {
+        query = query.ilike('name', `%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setPatients(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar pacientes:', err);
     }
-    fetch(url)
-      .then(res => res.json())
-      .then(data => setPatients(data))
-      .catch(err => console.error('Erro ao buscar pacientes:', err));
   };
 
   useEffect(() => {
-    fetchPatients();
-  }, [searchTerm]);
+    if (activeTenant) {
+      fetchPatients();
+    }
+  }, [searchTerm, activeTenant]);
 
   const handleOpenCreate = () => {
     setEditPatientId(null);
@@ -77,49 +91,58 @@ export default function Patients({ searchTerm }: PatientsProps) {
     setIsDrawerOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeTenant) return;
 
-    const payload = {
+    const payload: any = {
       name: formName,
-      email: formEmail,
-      phone: formPhone,
-      birth_date: formBirthDate,
-      cpf: formCpf,
-      satisfaction_score: Number(formSatisfaction)
+      email: formEmail || null,
+      phone: formPhone || null,
+      birth_date: formBirthDate || null,
+      cpf: formCpf || null,
+      satisfaction_score: Number(formSatisfaction),
+      tenant_id: activeTenant.id
     };
 
-    const method = editPatientId ? 'PUT' : 'POST';
-    const url = editPatientId 
-      ? `${API_URL}/api/patients/${editPatientId}` 
-      : `${API_URL}/api/patients`;
-
-    fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-      .then(res => res.json())
-      .then(() => {
-        setIsDrawerOpen(false);
-        fetchPatients();
-      })
-      .catch(err => console.error('Erro ao salvar paciente:', err));
+    try {
+      if (editPatientId) {
+        const { error } = await supabase
+          .from('patients')
+          .update(payload)
+          .eq('id', editPatientId)
+          .eq('tenant_id', activeTenant.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('patients')
+          .insert([payload]);
+        if (error) throw error;
+      }
+      setIsDrawerOpen(false);
+      fetchPatients();
+    } catch (err: any) {
+      console.error('Erro ao salvar paciente:', err);
+      alert('Erro ao salvar paciente: ' + err.message);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!activeTenant) return;
     if (!confirm('Deseja realmente excluir este paciente? Esta ação é irreversível.')) return;
 
-    fetch(`${API_URL}/api/patients/${id}`, {
-      method: 'DELETE'
-    })
-      .then(res => res.json())
-      .then(() => {
-        fetchPatients();
-      })
-      .catch(err => console.error('Erro ao excluir paciente:', err));
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', activeTenant.id);
+      if (error) throw error;
+      fetchPatients();
+    } catch (err: any) {
+      console.error('Erro ao excluir paciente:', err);
+      alert('Erro ao excluir paciente: ' + err.message);
+    }
   };
 
   return (

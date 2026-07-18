@@ -6,13 +6,27 @@ import {
   mockProcedures, 
   mockProfiles, 
   mockUnits,
+  mockInsumos,
+  mockEstoqueUnidade,
+  mockComprasEstoque,
+  mockMovimentacoesEstoque,
+  mockCustosFixos,
+  mockProcedimentoInsumos,
+  mockConsumoAtendimento,
   Patient,
   Appointment,
   ClinicFlow,
   Transaction,
   Procedure,
   Profile,
-  Unit
+  Unit,
+  Insumo,
+  EstoqueUnidade,
+  CompraEstoque,
+  MovimentacaoEstoque,
+  CustoFixo,
+  ProcedimentoInsumo,
+  ConsumoAtendimento
 } from './mockData.js';
 
 class MockStore {
@@ -23,6 +37,15 @@ class MockStore {
   procedures: Procedure[] = [...mockProcedures];
   profiles: Profile[] = [...mockProfiles];
   units: Unit[] = [...mockUnits];
+
+  // Estoque e Custos
+  insumos: Insumo[] = [...mockInsumos];
+  estoqueUnidade: EstoqueUnidade[] = [...mockEstoqueUnidade];
+  comprasEstoque: CompraEstoque[] = [...mockComprasEstoque];
+  movimentacoesEstoque: MovimentacaoEstoque[] = [...mockMovimentacoesEstoque];
+  custosFixos: CustoFixo[] = [...mockCustosFixos];
+  procedimentoInsumos: ProcedimentoInsumo[] = [...mockProcedimentoInsumos];
+  consumoAtendimento: ConsumoAtendimento[] = [...mockConsumoAtendimento];
 
   // Métodos auxiliares
   getPatients() { return this.patients; }
@@ -109,6 +132,191 @@ class MockStore {
   addProcedure(proc: Procedure) { this.procedures.push(proc); return proc; }
 
   getProfiles() { return this.profiles; }
+
+  // Métodos do módulo de Estoque & Custos
+  getInsumos(unitId: string) {
+    return this.insumos.map(insumo => {
+      const est = this.estoqueUnidade.find(e => e.insumo_id === insumo.id && e.unit_id === unitId);
+      return {
+        ...insumo,
+        quantidade_atual: est ? est.quantidade_atual : 0,
+        custo_medio: est ? est.custo_medio : 0
+      };
+    });
+  }
+
+  addInsumo(insumo: Insumo) {
+    this.insumos.push(insumo);
+    return insumo;
+  }
+
+  getMovimentacoes(unitId: string) {
+    return this.movimentacoesEstoque
+      .filter(m => m.unit_id === unitId)
+      .map(m => ({
+        ...m,
+        insumo: this.insumos.find(i => i.id === m.insumo_id)
+      }))
+      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+  }
+
+  addCompraEstoque(compra: CompraEstoque) {
+    const id = Math.random().toString(36).substring(2);
+    const newCompra = { ...compra, id };
+    this.comprasEstoque.push(newCompra);
+
+    // Atualizar estoque e custo médio ponderado
+    let est = this.estoqueUnidade.find(e => e.insumo_id === compra.insumo_id && e.unit_id === compra.unit_id);
+    if (!est) {
+      est = {
+        insumo_id: compra.insumo_id,
+        unit_id: compra.unit_id,
+        quantidade_atual: 0,
+        custo_medio: 0
+      };
+      this.estoqueUnidade.push(est);
+    }
+
+    const prevQty = est.quantidade_atual;
+    const prevCost = est.custo_medio;
+    const newQty = compra.quantidade;
+    const newCost = compra.valor_unitario;
+
+    if (prevQty <= 0) {
+      est.custo_medio = newCost;
+    } else {
+      est.custo_medio = ((prevQty * prevCost) + (newQty * newCost)) / (prevQty + newQty);
+    }
+    est.quantidade_atual += newQty;
+
+    // Registrar movimentação
+    this.movimentacoesEstoque.push({
+      id: Math.random().toString(36).substring(2),
+      insumo_id: compra.insumo_id,
+      unit_id: compra.unit_id,
+      tipo: 'entrada',
+      quantidade: newQty,
+      origem: 'compra',
+      data: new Date().toISOString()
+    });
+
+    return newCompra;
+  }
+
+  getCustosFixos(unitId: string, competencia: string) {
+    return this.custosFixos.filter(c => c.unidade_id === unitId && c.competencia === competencia);
+  }
+
+  addCustoFixo(custo: CustoFixo) {
+    const id = Math.random().toString(36).substring(2);
+    const newCusto = { ...custo, id };
+    this.custosFixos.push(newCusto);
+    return newCusto;
+  }
+
+  getProcedimentoInsumos(procedimentoId: string) {
+    return this.procedimentoInsumos
+      .filter(pi => pi.procedimento_id === procedimentoId)
+      .map(pi => ({
+        ...pi,
+        insumo: this.insumos.find(i => i.id === pi.insumo_id)
+      }));
+  }
+
+  updateProcedimentoInsumos(procedimentoId: string, list: { insumo_id: string; quantidade_padrao: number }[]) {
+    // Remover antigos
+    this.procedimentoInsumos = this.procedimentoInsumos.filter(pi => pi.procedimento_id !== procedimentoId);
+    
+    // Inserir novos
+    const added = list.map(item => {
+      const pi: ProcedimentoInsumo = {
+        procedimento_id: procedimentoId,
+        insumo_id: item.insumo_id,
+        quantidade_padrao: item.quantidade_padrao
+      };
+      this.procedimentoInsumos.push(pi);
+      return pi;
+    });
+
+    return added;
+  }
+
+  addConsumosAtendimento(appointmentId: string, unitId: string, procedimentoId: string, consumos: { insumo_id: string; quantidade_usada: number }[]) {
+    const now = new Date().toISOString();
+    const result = consumos.map(c => {
+      // Obter custo médio do momento
+      const est = this.estoqueUnidade.find(e => e.insumo_id === c.insumo_id && e.unit_id === unitId);
+      const custo_unitario = est ? est.custo_medio : 0;
+      
+      const newConsumo: ConsumoAtendimento = {
+        id: Math.random().toString(36).substring(2),
+        appointment_id: appointmentId,
+        procedimento_id: procedimentoId,
+        insumo_id: c.insumo_id,
+        quantidade_usada: c.quantidade_usada,
+        custo_unitario_no_momento: custo_unitario,
+        custo_total: c.quantidade_usada * custo_unitario
+      };
+
+      this.consumoAtendimento.push(newConsumo);
+
+      // Debitar do estoque
+      if (est) {
+        est.quantidade_atual -= c.quantidade_usada;
+      } else {
+        this.estoqueUnidade.push({
+          insumo_id: c.insumo_id,
+          unit_id: unitId,
+          quantidade_atual: -c.quantidade_usada,
+          custo_medio: 0
+        });
+      }
+
+      // Criar movimentação de saída
+      this.movimentacoesEstoque.push({
+        id: Math.random().toString(36).substring(2),
+        insumo_id: c.insumo_id,
+        unit_id: unitId,
+        tipo: 'saida',
+        quantidade: c.quantidade_usada,
+        origem: 'procedimento',
+        data: now
+      });
+
+      return newConsumo;
+    });
+
+    return result;
+  }
+
+  revertConsumosAtendimento(appointmentId: string, unitId: string) {
+    const consumos = this.consumoAtendimento.filter(c => c.appointment_id === appointmentId);
+    if (consumos.length === 0) return;
+
+    const now = new Date().toISOString();
+    consumos.forEach(c => {
+      // Devolver ao estoque
+      const est = this.estoqueUnidade.find(e => e.insumo_id === c.insumo_id && e.unit_id === unitId);
+      if (est) {
+        est.quantidade_atual += c.quantidade_usada;
+      }
+
+      // Criar movimentação de estorno
+      this.movimentacoesEstoque.push({
+        id: Math.random().toString(36).substring(2),
+        insumo_id: c.insumo_id,
+        unit_id: unitId,
+        tipo: 'estorno',
+        quantidade: c.quantidade_usada,
+        origem: 'procedimento',
+        data: now
+      });
+    });
+
+    // Remover consumos
+    this.consumoAtendimento = this.consumoAtendimento.filter(c => c.appointment_id !== appointmentId);
+  }
 }
 
 export const mockStore = new MockStore();
+

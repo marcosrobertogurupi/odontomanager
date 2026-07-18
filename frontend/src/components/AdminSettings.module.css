@@ -147,3 +147,21 @@
 .actionBtn:hover {
   background-color: hsl(var(--primary-hover));
 }
+
+.removeBtn {
+  background: transparent;
+  border: 1px solid hsl(var(--danger));
+  color: hsl(var(--danger));
+  padding: 6px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.removeBtn:hover {
+  background-color: hsl(var(--danger));
+  color: white;
+}
+

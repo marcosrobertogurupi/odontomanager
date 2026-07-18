@@ -7,9 +7,11 @@ import {
   Sparkles,
   Building,
   ChevronDown,
-  Star
+  Star,
+  LogOut
 } from 'lucide-react';
 import styles from './Navbar.module.css';
+import { useTenant } from '../contexts/TenantContext';
 
 interface NavbarProps {
   isSidebarCollapsed: boolean;
@@ -27,6 +29,7 @@ export default function Navbar({
   onSearch 
 }: NavbarProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const { profile, role, logout } = useTenant();
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -34,7 +37,26 @@ export default function Navbar({
     onSearch(val);
   };
 
-  const activeUnitName = units.find(u => u.id === selectedUnit)?.name || 'Carregando unidade...';
+  const activeUnitName = units.find(u => u.id === selectedUnit)?.name || 'Matriz';
+
+  const getUserInitials = () => {
+    if (!profile?.name) return 'U';
+    const parts = profile.name.split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return profile.name.substring(0, 2).toUpperCase();
+  };
+
+  const getRoleLabel = () => {
+    if (role === 'clinic_owner') return 'Proprietário';
+    if (role === 'admin') return 'Administrador';
+    if (role === 'dentist') return 'Dentista';
+    if (role === 'receptionist') return 'Recepção';
+    if (role === 'finance') return 'Financeiro';
+    if (role === 'super_admin') return 'Super Admin';
+    return 'Profissional';
+  };
 
   return (
     <header className={`${styles.navbar} ${isSidebarCollapsed ? styles.fullWidth : ''}`}>
@@ -97,11 +119,19 @@ export default function Navbar({
 
         {/* Perfil */}
         <div className={styles.profileContainer}>
-          <div className={styles.avatar}>CR</div>
+          <div className={styles.avatar}>{getUserInitials()}</div>
           <div className={styles.profileInfo}>
-            <span className={styles.profileName}>Carlos Ramos</span>
-            <span className={styles.profileRole}>Administrador</span>
+            <span className={styles.profileName}>{profile ? profile.name : 'Carregando...'}</span>
+            <span className={styles.profileRole}>{getRoleLabel()}</span>
           </div>
+          <button 
+            onClick={logout}
+            className={styles.shortcutBtn} 
+            title="Sair da Conta"
+            style={{ marginLeft: '12px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+          >
+            <LogOut size={18} style={{ color: 'hsl(var(--danger))' }} />
+          </button>
         </div>
       </div>
     </header>

@@ -13,7 +13,8 @@ router.get('/', async (req, res, next) => {
     let query = supabase.from('appointments').select(`
       *,
       patient:patients(*),
-      professional:profiles(*)
+      professional:profiles(*),
+      procedure:procedures(*)
     `);
 
     if (unit_id) query = query.eq('unit_id', unit_id);
@@ -42,23 +43,30 @@ router.get('/', async (req, res, next) => {
       const dStr = date as string;
       list = list.filter(a => a.start_time.startsWith(dStr));
     }
-    res.json(list);
+
+    const fullList = list.map(app => ({
+      ...app,
+      procedure: mockStore.procedures.find(p => p.id === app.procedure_id)
+    }));
+
+    res.json(fullList);
   }
 });
 
 // POST /api/appointments - Criar
 router.post('/', async (req, res, next) => {
-  const { patient_id, professional_id, unit_id, start_time, end_time, status, room, notes } = req.body;
+  const { patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('appointments')
-      .insert([{ patient_id, professional_id, unit_id, start_time, end_time, status, room, notes }])
+      .insert([{ patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id }])
       .select(`
         *,
         patient:patients(*),
-        professional:profiles(*)
+        professional:profiles(*),
+        procedure:procedures(*)
       `)
       .single();
 
@@ -76,12 +84,16 @@ router.post('/', async (req, res, next) => {
       end_time,
       status: status || 'scheduled',
       room,
-      notes
+      notes,
+      procedure_id
     };
     mockStore.addAppointment(newApp);
     
     // Retorna com os dados relacionados anexados para o frontend
     const fullApp = mockStore.getAppointments().find(a => a.id === id);
+    if (fullApp) {
+      (fullApp as any).procedure = mockStore.procedures.find(p => p.id === procedure_id);
+    }
     res.status(201).json(fullApp || newApp);
   }
 });
@@ -89,18 +101,38 @@ router.post('/', async (req, res, next) => {
 // PUT /api/appointments/:id - Atualizar
 router.put('/:id', async (req, res, next) => {
   const { id } = req.params;
-  const { status, start_time, end_time, room, notes } = req.body;
+  const { status, start_time, end_time, room, notes, procedure_id } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
+    // Se estiver cancelando ou marcando como falta, processa estornos
+    if (status === 'canceled' || status === 'missed') {
+      const { data: currentApp } = await supabase
+        .from('appointments')
+        .select('unit_id')
+        .eq('id', id)
+        .single();
+      
+      if (currentApp) {
+        await supabase.rpc('estornar_consumo_atendimento', {
+          p_appointment_id: id,
+          p_unit_id: currentApp.unit_id
+        });
+      }
+    }
+
+    const updateFields: any = { status, start_time, end_time, room, notes };
+    if (procedure_id !== undefined) updateFields.procedure_id = procedure_id;
+
     const { data, error } = await supabase
       .from('appointments')
-      .update({ status, start_time, end_time, room, notes })
+      .update(updateFields)
       .eq('id', id)
       .select(`
         *,
         patient:patients(*),
-        professional:profiles(*)
+        professional:profiles(*),
+        procedure:procedures(*)
       `)
       .single();
 
@@ -108,10 +140,21 @@ router.put('/:id', async (req, res, next) => {
     res.json(data);
   } catch (err) {
     console.warn('[Appointments Route] Atualizando em mock:', (err as Error).message);
-    const updated = mockStore.updateAppointment(id, { status, start_time, end_time, room, notes });
+
+    if (status === 'canceled' || status === 'missed') {
+      const app = mockStore.appointments.find(a => a.id === id);
+      if (app) {
+        mockStore.revertConsumosAtendimento(id, app.unit_id);
+      }
+    }
+
+    const updated = mockStore.updateAppointment(id, { status, start_time, end_time, room, notes, procedure_id });
     if (!updated) return res.status(404).json({ error: 'Appointment not found' });
     
     const fullApp = mockStore.getAppointments().find(a => a.id === id);
+    if (fullApp) {
+      (fullApp as any).procedure = mockStore.procedures.find(p => p.id === (procedure_id || fullApp.procedure_id));
+    }
     res.json(fullApp || updated);
   }
 });
