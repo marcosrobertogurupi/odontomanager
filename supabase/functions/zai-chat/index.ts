@@ -66,22 +66,45 @@ async function send_patient_message(
   channel: string,
   authHeader: string
 ) {
-  // 1. Localizar paciente
-  const { data: patient, error: patientError } = await supabaseClient
+  // 1. Localizar paciente com busca flexível/fuzzy
+  let { data: patients, error: patientError } = await supabaseClient
     .from('patients')
     .select('id, name, phone')
     .eq('tenant_id', tenantId)
-    .ilike('name', `%${patientName}%`)
-    .limit(1)
-    .maybeSingle();
+    .ilike('name', `%${patientName}%`);
 
-  if (patientError || !patient) {
-    return { error: `Paciente '${patientName}' não encontrado.` };
+  // Se não encontrar nenhuma correspondência direta, divide por palavras
+  if (!patientError && (!patients || patients.length === 0)) {
+    const words = patientName.split(/\s+/).filter(w => w.length > 2);
+    if (words.length > 0) {
+      const orClause = words.map(w => `name.ilike.%${w}%`).join(',');
+      const { data: fuzzyPatients, error: fuzzyError } = await supabaseClient
+        .from('patients')
+        .select('id, name, phone')
+        .eq('tenant_id', tenantId)
+        .or(orClause)
+        .limit(5);
+
+      if (!fuzzyError && fuzzyPatients && fuzzyPatients.length > 0) {
+        patients = fuzzyPatients;
+      }
+    }
   }
 
+  if (patientError || !patients || patients.length === 0) {
+    return { error: `Paciente '${patientName}' não encontrado no sistema. Por favor digite o nome exato ou cadastrado.` };
+  }
+
+  // Se encontrar múltiplos candidatos
+  if (patients.length > 1) {
+    const candidateNames = patients.map((p: any) => p.name).join(', ');
+    return { error: `Encontrei múltiplos pacientes parecidos (${candidateNames}). Por favor, informe o nome mais completo ou exato de quem você quer enviar.` };
+  }
+
+  const patient = patients[0];
   const phone = patient.phone;
   if (!phone) {
-    return { error: `Paciente '${patient.name}' não possui telefone cadastrado.` };
+    return { error: `Paciente '${patient.name}' foi encontrado, mas não possui telefone cadastrado.` };
   }
 
   // 2. Chamar a Edge Function send-message

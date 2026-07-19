@@ -71,23 +71,28 @@ serve(async (req) => {
       resData = await response.json()
     } else {
       // Envio padrão via UAZAPI (WhatsApp)
-      if (!integration || !integration.uazapi_instance_id || !integration.uazapi_token) {
-        throw new Error("Instância do UAZAPI não configurada para este tenant.")
+      if (!integration || !integration.uazapi_token) {
+        throw new Error("Token do UAZAPI não configurado para este tenant.")
       }
 
       const serverUrl = integration.uazapi_server_url || 'https://api.uazapi.com'
       const cleanServerUrl = serverUrl.replace(/\/$/, '')
-      const url = `${cleanServerUrl}/instance/${integration.uazapi_instance_id}/sendMessage`
+      const url = `${cleanServerUrl}/send/text`
+
+      let cleanNumber = phone.replace(/\D/g, '')
+      if (cleanNumber.length === 10 || cleanNumber.length === 11) {
+        cleanNumber = '55' + cleanNumber
+      }
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${integration.uazapi_token}`
+          'token': integration.uazapi_token
         },
         body: JSON.stringify({
-          phone: phone,
-          message: message
+          number: cleanNumber,
+          text: message
         })
       })
 
