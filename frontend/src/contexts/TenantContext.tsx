@@ -9,6 +9,7 @@ export interface Tenant {
   status_assinatura: 'ativo' | 'inadimplente' | 'cancelado';
   limite_usuarios: number;
   limite_unidades: number;
+  logo_url?: string | null;
 }
 
 export interface UserTenantAssociation {
@@ -39,6 +40,7 @@ interface TenantContextType {
   selectTenant: (tenantId: string) => Promise<void>;
   selectUnit: (unitId: string) => void;
   logout: () => Promise<void>;
+  updateTenantLogo: (logoUrl: string | null) => void;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -185,6 +187,26 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
+  const updateTenantLogo = (logoUrl: string | null) => {
+    if (activeTenant) {
+      setActiveTenant({ ...activeTenant, logo_url: logoUrl });
+      setUserTenants((prev) =>
+        prev.map((assoc) => {
+          if (assoc.tenant_id === activeTenant.id) {
+            return {
+              ...assoc,
+              tenants: {
+                ...assoc.tenants,
+                logo_url: logoUrl,
+              },
+            };
+          }
+          return assoc;
+        })
+      );
+    }
+  };
+
   return (
     <TenantContext.Provider
       value={{
@@ -199,6 +221,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         selectTenant,
         selectUnit,
         logout,
+        updateTenantLogo,
       }}
     >
       {children}

@@ -8,7 +8,10 @@ import {
   Activity,
   CreditCard,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Image,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import styles from './AdminSettings.module.css';
 import { useTenant } from '../contexts/TenantContext';
@@ -43,9 +46,10 @@ interface AdminSettingsProps {
 }
 
 export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps) {
-  const { activeTenant, role } = useTenant();
+  const { activeTenant, role, updateTenantLogo } = useTenant();
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [tenants, setTenants] = useState<TenantModel[]>([]);
+  const [uploading, setUploading] = useState(false);
   
   // Novo Procedimento
   const [formName, setFormName] = useState('');
@@ -145,6 +149,82 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       setTenants(data || []);
     } catch (err) {
       console.error('Erro ao buscar clínicas do SaaS:', err);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeTenant) return;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Por favor, envie apenas imagens PNG, JPG/JPEG ou SVG.');
+      return;
+    }
+
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('A imagem deve ter no máximo 2MB.');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `logo-${Date.now()}.${fileExt}`;
+      const filePath = `${activeTenant.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('clinic-logos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('clinic-logos')
+        .getPublicUrl(filePath);
+
+      const { error: dbError } = await supabase
+        .from('tenants')
+        .update({ logo_url: publicUrl })
+        .eq('id', activeTenant.id);
+
+      if (dbError) throw dbError;
+
+      updateTenantLogo(publicUrl);
+      alert('Logomarca atualizada com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao enviar logomarca:', err);
+      alert('Erro ao enviar: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    if (!activeTenant) return;
+    if (!confirm('Deseja realmente remover a logomarca da clínica?')) return;
+
+    try {
+      setUploading(true);
+
+      const { error: dbError } = await supabase
+        .from('tenants')
+        .update({ logo_url: null })
+        .eq('id', activeTenant.id);
+
+      if (dbError) throw dbError;
+
+      updateTenantLogo(null);
+      alert('Logomarca removida com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao remover logomarca:', err);
+      alert('Erro ao remover: ' + err.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -350,6 +430,123 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       </div>
 
       <div className={styles.grid}>
+        {/* Marca e Logomarca da Clínica */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>
+            <Image size={20} style={{ color: 'hsl(var(--primary))' }} />
+            Logomarca e Identidade Visual
+          </h2>
+          <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', lineHeight: '1.5' }}>
+            Envie a logomarca da sua clínica para personalizar a barra lateral de navegação e as comunicações com os pacientes.
+          </p>
+
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '20px', 
+            background: 'rgba(255, 255, 255, 0.02)', 
+            padding: '20px', 
+            borderRadius: '12px', 
+            border: '1px solid hsl(var(--border-color))',
+            marginTop: '8px'
+          }}>
+            {activeTenant?.logo_url ? (
+              <div style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+                <img 
+                  src={activeTenant.logo_url} 
+                  alt="Logo da Clínica" 
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover', 
+                    borderRadius: '12px',
+                    border: '2px solid hsl(var(--primary))'
+                  }} 
+                />
+              </div>
+            ) : (
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '12px', 
+                background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '28px',
+                boxShadow: '0 4px 12px rgba(124, 58, 237, 0.25)',
+                flexShrink: 0
+              }}>
+                {activeTenant ? activeTenant.nome_clinica.substring(0, 2).toUpperCase() : 'OM'}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: 'hsl(var(--text-main))' }}>
+                {activeTenant ? activeTenant.nome_clinica : 'Minha Clínica'}
+              </span>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))' }}>
+                Formatos aceitos: PNG, JPG ou SVG. Limite de 2MB.
+              </span>
+              
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'hsl(var(--primary))',
+                  color: 'white',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  transition: 'opacity 0.2s',
+                  opacity: uploading ? 0.7 : 1
+                }}>
+                  <Upload size={14} />
+                  <span>{uploading ? 'Enviando...' : 'Carregar Nova Logo'}</span>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleLogoUpload} 
+                    disabled={uploading}
+                    style={{ display: 'none' }} 
+                  />
+                </label>
+
+                {activeTenant?.logo_url && (
+                  <button
+                    onClick={handleLogoRemove}
+                    disabled={uploading}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      color: '#ef4444',
+                      border: 'none',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                  >
+                    <Trash2 size={14} />
+                    <span>Remover</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Unidades da Clínica */}
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>

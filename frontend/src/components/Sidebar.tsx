@@ -51,7 +51,11 @@ export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsC
     >
       <div className={styles.header}>
         <div className={styles.logoIcon}>
-          {activeTenant ? activeTenant.nome_clinica.substring(0, 2).toUpperCase() : 'OM'}
+          {activeTenant && activeTenant.logo_url ? (
+            <img src={activeTenant.logo_url} className={styles.logoImg} alt={activeTenant.nome_clinica} />
+          ) : (
+            activeTenant ? activeTenant.nome_clinica.substring(0, 2).toUpperCase() : 'OM'
+          )}
         </div>
         {isExpanded && (
           <span className={styles.logoText}>
