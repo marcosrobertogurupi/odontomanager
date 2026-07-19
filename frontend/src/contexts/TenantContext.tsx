@@ -167,18 +167,25 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        if (currentUser) {
-          loadUserData(currentUser);
-        } else {
-          setProfile(null);
-          setUserTenants([]);
-          setActiveTenant(null);
-          setRole(null);
-          setActiveUnitId(null);
-          setIsReadOnly(false);
-          setLoading(false);
-        }
+        
+        setUser((prevUser) => {
+          // Apenas recarregar se o usuário realmente mudou (login, logout, etc.)
+          // Evita recarregar nos eventos de TOKEN_REFRESHED disparados no foco da janela
+          if (currentUser?.id !== prevUser?.id) {
+            if (currentUser) {
+              loadUserData(currentUser);
+            } else {
+              setProfile(null);
+              setUserTenants([]);
+              setActiveTenant(null);
+              setRole(null);
+              setActiveUnitId(null);
+              setIsReadOnly(false);
+              setLoading(false);
+            }
+          }
+          return currentUser;
+        });
       }
     );
 
