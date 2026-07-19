@@ -21,7 +21,7 @@ interface Unit {
 }
 
 function AppContent() {
-  const { user, activeTenant, loading, logout, isReadOnly, role } = useTenant();
+  const { user, activeTenant, loading, logout, isReadOnly, role, activeUnitId, selectUnit } = useTenant();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -40,7 +40,9 @@ function AppContent() {
       if (error) throw error;
       setUnits(data || []);
       if (data && data.length > 0) {
-        setSelectedUnit(data[0].id);
+        const defaultUnit = activeUnitId || data[0].id;
+        setSelectedUnit(defaultUnit);
+        selectUnit(defaultUnit);
       }
     } catch (err) {
       console.error('Erro ao buscar unidades:', err);
@@ -52,6 +54,19 @@ function AppContent() {
       fetchUnits();
     }
   }, [activeTenant]);
+
+  // Sincroniza a unidade selecionada com o contexto global
+  useEffect(() => {
+    if (activeUnitId && activeUnitId !== selectedUnit) {
+      setSelectedUnit(activeUnitId);
+    }
+  }, [activeUnitId, selectedUnit]);
+
+  useEffect(() => {
+    if (selectedUnit) {
+      selectUnit(selectedUnit);
+    }
+  }, [selectedUnit, selectUnit]);
 
   // Validar permissão da aba ativa ao mudar de role ou tab
   useEffect(() => {
