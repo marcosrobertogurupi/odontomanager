@@ -23,7 +23,7 @@ interface Unit {
 function AppContent() {
   const { user, activeTenant, loading, logout, isReadOnly, role } = useTenant();
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState('');
   const [searchTerm, setSearchTerm] = useState('');

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   Activity, 
@@ -23,6 +23,9 @@ interface SidebarProps {
 
 export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsCollapsed }: SidebarProps) {
   const { activeTenant, role } = useTenant();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isExpanded = !isCollapsed || isHovered;
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['clinic_owner', 'admin', 'dentist', 'receptionist', 'finance', 'super_admin'] },
@@ -41,12 +44,16 @@ export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsC
   });
 
   return (
-    <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
+    <aside 
+      className={`${styles.sidebar} ${!isExpanded ? styles.collapsed : ''}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div className={styles.header}>
         <div className={styles.logoIcon}>
           {activeTenant ? activeTenant.nome_clinica.substring(0, 2).toUpperCase() : 'OM'}
         </div>
-        {!isCollapsed && (
+        {isExpanded && (
           <span className={styles.logoText}>
             {activeTenant ? activeTenant.nome_clinica : 'OdontoManager'}
           </span>
@@ -62,10 +69,10 @@ export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsC
               key={item.id}
               onClick={() => setCurrentTab(item.id)}
               className={`${styles.navItem} ${isActive ? styles.active : ''}`}
-              title={isCollapsed ? item.label : undefined}
+              title={!isExpanded ? item.label : undefined}
             >
               <Icon size={20} />
-              {!isCollapsed && <span className={styles.navLabel}>{item.label}</span>}
+              {isExpanded && <span className={styles.navLabel}>{item.label}</span>}
             </button>
           );
         })}
@@ -77,7 +84,7 @@ export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsC
           className={styles.toggleButton}
         >
           {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          {!isCollapsed && <span>Recolher Menu</span>}
+          {isExpanded && <span>{isCollapsed ? 'Fixar Menu' : 'Recolher Menu'}</span>}
         </button>
       </div>
     </aside>
