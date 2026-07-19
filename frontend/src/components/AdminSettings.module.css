@@ -165,3 +165,28 @@
   color: white;
 }
 
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.formRow3_1 {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 16px;
+}
+
+.formRow2_1 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .formRow, .formRow3_1, .formRow2_1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+

@@ -10,6 +10,15 @@ export interface Tenant {
   limite_usuarios: number;
   limite_unidades: number;
   logo_url?: string | null;
+  email?: string | null;
+  telefone_whatsapp?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  cep?: string | null;
+  website?: string | null;
 }
 
 export interface UserTenantAssociation {
@@ -41,6 +50,7 @@ interface TenantContextType {
   selectUnit: (unitId: string) => void;
   logout: () => Promise<void>;
   updateTenantLogo: (logoUrl: string | null) => void;
+  updateTenantDetails: (details: Partial<Tenant>) => void;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -214,6 +224,26 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const updateTenantDetails = (details: Partial<Tenant>) => {
+    if (activeTenant) {
+      setActiveTenant((prev) => prev ? { ...prev, ...details } : null);
+      setUserTenants((prev) =>
+        prev.map((assoc) => {
+          if (assoc.tenant_id === activeTenant.id) {
+            return {
+              ...assoc,
+              tenants: {
+                ...assoc.tenants,
+                ...details,
+              },
+            };
+          }
+          return assoc;
+        })
+      );
+    }
+  };
+
   return (
     <TenantContext.Provider
       value={{
@@ -229,6 +259,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         selectUnit,
         logout,
         updateTenantLogo,
+        updateTenantDetails,
       }}
     >
       {children}

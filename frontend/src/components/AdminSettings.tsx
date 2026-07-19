@@ -49,7 +49,7 @@ interface AdminSettingsProps {
 }
 
 export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps) {
-  const { activeTenant, role, updateTenantLogo } = useTenant();
+  const { activeTenant, role, updateTenantLogo, updateTenantDetails } = useTenant();
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [tenants, setTenants] = useState<TenantModel[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -66,6 +66,19 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
   
   const [savingIntegrations, setSavingIntegrations] = useState(false);
+
+  // Campos cadastrais da clínica
+  const [clinicName, setClinicName] = useState('');
+  const [clinicEmail, setClinicEmail] = useState('');
+  const [clinicPhone, setClinicPhone] = useState('');
+  const [clinicLogradouro, setClinicLogradouro] = useState('');
+  const [clinicNumero, setClinicNumero] = useState('');
+  const [clinicBairro, setClinicBairro] = useState('');
+  const [clinicCidade, setClinicCidade] = useState('');
+  const [clinicEstado, setClinicEstado] = useState('');
+  const [clinicCep, setClinicCep] = useState('');
+  const [clinicWebsite, setClinicWebsite] = useState('');
+  const [savingDetails, setSavingDetails] = useState(false);
   
   // Novo Procedimento
   const [formName, setFormName] = useState('');
@@ -314,6 +327,53 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
     }
   };
 
+  const handleSaveDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant) return;
+
+    try {
+      setSavingDetails(true);
+
+      const { error } = await supabase
+        .from('tenants')
+        .update({
+          nome_clinica: clinicName,
+          email: clinicEmail || null,
+          telefone_whatsapp: clinicPhone || null,
+          logradouro: clinicLogradouro || null,
+          numero: clinicNumero || null,
+          bairro: clinicBairro || null,
+          cidade: clinicCidade || null,
+          estado: clinicEstado || null,
+          cep: clinicCep || null,
+          website: clinicWebsite || null
+        })
+        .eq('id', activeTenant.id);
+
+      if (error) throw error;
+
+      updateTenantDetails({
+        nome_clinica: clinicName,
+        email: clinicEmail,
+        telefone_whatsapp: clinicPhone,
+        logradouro: clinicLogradouro,
+        numero: clinicNumero,
+        bairro: clinicBairro,
+        cidade: clinicCidade,
+        estado: clinicEstado,
+        cep: clinicCep,
+        website: clinicWebsite
+      });
+
+      alert('Dados cadastrais da clínica atualizados com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao salvar dados cadastrais:', err);
+      alert('Erro ao salvar dados cadastrais: ' + err.message);
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTenant) {
       fetchProcedures();
@@ -324,6 +384,21 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       fetchAllTenants();
     }
   }, [activeTenant, role]);
+
+  useEffect(() => {
+    if (activeTenant) {
+      setClinicName(activeTenant.nome_clinica || '');
+      setClinicEmail(activeTenant.email || '');
+      setClinicPhone(activeTenant.telefone_whatsapp || '');
+      setClinicLogradouro(activeTenant.logradouro || '');
+      setClinicNumero(activeTenant.numero || '');
+      setClinicBairro(activeTenant.bairro || '');
+      setClinicCidade(activeTenant.cidade || '');
+      setClinicEstado(activeTenant.estado || '');
+      setClinicCep(activeTenant.cep || '');
+      setClinicWebsite(activeTenant.website || '');
+    }
+  }, [activeTenant]);
 
   const handleAddProcedure = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -632,6 +707,147 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Dados Cadastrais da Clínica */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>
+            <Building size={20} style={{ color: 'hsl(var(--primary))' }} />
+            Dados Cadastrais da Clínica
+          </h2>
+          <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', lineHeight: '1.5', marginTop: '-8px' }}>
+            Atualize as informações cadastrais de contato e endereço da clínica.
+          </p>
+
+          <form className={styles.form} onSubmit={handleSaveDetails} style={{ borderTop: 'none', paddingTop: 0 }}>
+            <div className={styles.formGroup}>
+              <label>Nome da Clínica</label>
+              <input 
+                type="text" 
+                className={styles.input} 
+                value={clinicName}
+                onChange={(e) => setClinicName(e.target.value)}
+                placeholder="Ex: Clinica Talissa"
+                required 
+              />
+            </div>
+
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label>E-mail de Contato</label>
+                <input 
+                  type="email" 
+                  className={styles.input} 
+                  value={clinicEmail}
+                  onChange={(e) => setClinicEmail(e.target.value)}
+                  placeholder="Ex: contato@clinica.com"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Telefone / Whatsapp</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicPhone}
+                  onChange={(e) => setClinicPhone(e.target.value)}
+                  placeholder="Ex: (11) 99999-9999"
+                />
+              </div>
+            </div>
+
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label>CEP</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicCep}
+                  onChange={(e) => setClinicCep(e.target.value)}
+                  placeholder="Ex: 01000-000"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Website</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicWebsite}
+                  onChange={(e) => setClinicWebsite(e.target.value)}
+                  placeholder="Ex: www.clinica.com"
+                />
+              </div>
+            </div>
+
+            <div className={styles.formRow3_1}>
+              <div className={styles.formGroup}>
+                <label>Logradouro</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicLogradouro}
+                  onChange={(e) => setClinicLogradouro(e.target.value)}
+                  placeholder="Ex: Avenida Paulista"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Número</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicNumero}
+                  onChange={(e) => setClinicNumero(e.target.value)}
+                  placeholder="Ex: 1000"
+                />
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Bairro</label>
+              <input 
+                type="text" 
+                className={styles.input} 
+                value={clinicBairro}
+                onChange={(e) => setClinicBairro(e.target.value)}
+                placeholder="Ex: Bela Vista"
+              />
+            </div>
+
+            <div className={styles.formRow2_1}>
+              <div className={styles.formGroup}>
+                <label>Cidade</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicCidade}
+                  onChange={(e) => setClinicCidade(e.target.value)}
+                  placeholder="Ex: São Paulo"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Estado</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={clinicEstado}
+                  onChange={(e) => setClinicEstado(e.target.value)}
+                  placeholder="Ex: SP"
+                />
+              </div>
+            </div>
+
+            <button type="submit" className={styles.actionBtn} disabled={savingDetails} style={{ width: '100%', marginTop: '10px' }}>
+              {savingDetails ? (
+                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Plus size={16} />
+              )}
+              <span>{savingDetails ? 'Salvando...' : 'Salvar Dados Cadastrais'}</span>
+            </button>
+          </form>
         </div>
 
         {/* Unidades da Clínica */}
