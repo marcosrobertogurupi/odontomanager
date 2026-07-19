@@ -11,7 +11,18 @@ import {
   Lock, 
   RefreshCw, 
   SlidersHorizontal,
-  Info
+  Info,
+  Edit2,
+  Trash,
+  Calculator,
+  Save,
+  Check,
+  TrendingDown,
+  TrendingUp,
+  Sliders,
+  DollarSign as MoneyIcon,
+  X,
+  ShieldAlert
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
@@ -23,88 +34,193 @@ interface InventoryCostsProps {
 
 export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   const { activeTenant, role } = useTenant();
-  const [activeTab, setActiveTab] = useState<'estoque' | 'compras' | 'custos' | 'bom' | 'margens'>('estoque');
-  
-  // Estados de dados
-  const [insumos, setInsumos] = useState<any[]>([]);
-  const [movements, setMovements] = useState<any[]>([]);
-  const [custosFixos, setCustosFixos] = useState<any[]>([]);
-  const [procedures, setProcedures] = useState<any[]>([]);
-  const [bomItems, setBomItems] = useState<any[]>([]);
-  const [selectedProcedure, setSelectedProcedure] = useState('');
-  const [reportData, setReportData] = useState<any[]>([]);
-  
+  const [activeTab, setActiveTab] = useState<'custos' | 'insumos' | 'estoque' | 'precificacao' | 'rentabilidade'>('estoque');
   const [loading, setLoading] = useState(false);
-  const [competence, setCompetence] = useState('07/2026'); // Valor de seed para teste
+
+  // =========================================================================
+  // ESTADOS DOS DADOS
+  // =========================================================================
+
+  // 1. Custos Fixos & Parâmetros
+  const [custosFixos, setCustosFixos] = useState<any[]>([]);
+  const [paramId, setParamId] = useState<string | null>(null);
+  const [numeroCadeiras, setNumeroCadeiras] = useState(1);
+  const [horasFuncionamentoMes, setHorasFuncionamentoMes] = useState(160);
+  const [horasOcupadasMes, setHorasOcupadasMes] = useState(120);
+
+  // 2. Insumos
+  const [insumos, setInsumos] = useState<any[]>([]);
+
+  // 3. Estoque & Movimentações
+  const [estoqueUnidade, setEstoqueUnidade] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+
+  // 4. Precificação
+  const [procedures, setProcedures] = useState<any[]>([]);
+  const [selectedProcedure, setSelectedProcedure] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const [bomItems, setBomItems] = useState<any[]>([]);
   
-  // Drawers
+  // Parâmetros do Procedimento Selecionado
+  const [custoMaterialEspecial, setCustoMaterialEspecial] = useState(0);
+  const [custoTerceirosLaboratorio, setCustoTerceirosLaboratorio] = useState(0);
+  const [tempoConsultaMinutos, setTempoConsultaMinutos] = useState(30);
+  const [numeroSessoesTotal, setNumeroSessoesTotal] = useState(1);
+  const [comissaoProfissionalPct, setComissaoProfissionalPct] = useState(0);
+  const [taxaCartaoPct, setTaxaCartaoPct] = useState(0);
+  const [impostosPct, setImpostosPct] = useState(0);
+  const [margemLucroDesejadaPct, setMargemLucroDesejadaPct] = useState(0);
+  const [outrasDeducoesPct, setOutrasDeducoesPct] = useState(0);
+  const [precoPraticado, setPrecoPraticado] = useState(0);
+
+  // 5. Rentabilidade
+  const [rentabilidadeData, setRentabilidadeData] = useState<any[]>([]);
+
+  // Drawers e Modais
   const [isNewInsumoOpen, setIsNewInsumoOpen] = useState(false);
+  const [isEditInsumoOpen, setIsEditInsumoOpen] = useState(false);
+  const [selectedInsumoForEdit, setSelectedInsumoForEdit] = useState<any>(null);
+  
   const [isNewCompraOpen, setIsNewCompraOpen] = useState(false);
   const [isNewCustoOpen, setIsNewCustoOpen] = useState(false);
+  const [isAjusteManualOpen, setIsAjusteManualOpen] = useState(false);
 
-  // Forms
-  const [formInsumo, setFormInsumo] = useState({ nome: '', unidade_medida: 'unidade', estoque_minimo: '', categoria: 'Descartáveis' });
-  const [formCompra, setFormCompra] = useState({ insumo_id: '', fornecedor: '', quantidade: '', valor_total: '', nota_fiscal: '' });
-  const [formCusto, setFormCusto] = useState({ nome: '', tipo: 'fixo_mensal' as any, valor: '', competencia: '07/2026' });
+  // Formulários
+  const [formInsumo, setFormInsumo] = useState({
+    nome: '',
+    categoria: 'Descartáveis',
+    unidade_medida: 'unidade',
+    quantidade_embalagem: '',
+    quantidade_rendimento: '',
+    preco_embalagem_atual: '',
+    estoque_minimo: '',
+    ativo: true
+  });
 
-  // Funções de busca
-  const fetchInsumos = async () => {
+  const [formCompra, setFormCompra] = useState({
+    insumo_id: '',
+    fornecedor: '',
+    quantidade_comprada: '',
+    preco_pago_embalagem: '',
+    nota_fiscal: ''
+  });
+
+  const [formCusto, setFormCusto] = useState({
+    nome_custo: '',
+    valor_mensal: '',
+    ativo: true
+  });
+
+  const [formAjuste, setFormAjuste] = useState({
+    insumo_id: '',
+    quantidade: '',
+    tipo: 'saida', // 'entrada' | 'saida' | 'ajuste'
+    motivo: 'perda'
+  });
+
+  const isAdmin = role === 'admin' || role === 'clinic_owner' || role === 'super_admin';
+
+  // =========================================================================
+  // CONSULTAS DE DADOS
+  // =========================================================================
+
+  const fetchAll = async () => {
     if (!activeTenant || !selectedUnit) return;
     setLoading(true);
     try {
-      const { data: insumosData, error } = await supabase
-        .from('insumos')
-        .select(`
-          *,
-          estoque_unidade (
-            quantidade_atual,
-            custo_medio,
-            unit_id
-          )
-        `)
-        .eq('tenant_id', activeTenant.id)
-        .order('nome');
-
-      if (error) throw error;
-
-      const formatted = (insumosData || []).map((i: any) => {
-        const est = i.estoque_unidade?.find((e: any) => e.unit_id === selectedUnit);
-        return {
-          id: i.id,
-          nome: i.nome,
-          unidade_medida: i.unidade_medida,
-          estoque_minimo: i.estoque_minimo,
-          categoria: i.categoria,
-          status: i.status,
-          quantidade_atual: est ? Number(est.quantidade_atual) : 0,
-          custo_medio: est ? Number(est.custo_medio) : 0
-        };
-      });
-
-      setInsumos(formatted);
+      await Promise.all([
+        fetchParametersAndCosts(),
+        fetchInsumosAndEstoque(),
+        fetchMovements(),
+        fetchProcedures(),
+        fetchRentabilidade()
+      ]);
     } catch (err) {
-      console.error('Erro ao buscar insumos:', err);
+      console.error('Erro ao buscar dados:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchAll();
+  }, [activeTenant, selectedUnit]);
+
+  // 1. Buscar parâmetros e custos fixos
+  const fetchParametersAndCosts = async () => {
+    if (!activeTenant || !selectedUnit) return;
+    try {
+      // Custos fixos
+      const { data: costs, error: costsErr } = await supabase
+        .from('custos_fixos')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit)
+        .order('nome_custo');
+      if (costsErr) throw costsErr;
+      setCustosFixos(costs || []);
+
+      // Parâmetros da unidade
+      const { data: params, error: paramsErr } = await supabase
+        .from('parametros_custo_unidade')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit)
+        .maybeSingle();
+
+      if (paramsErr) throw paramsErr;
+
+      if (params) {
+        setParamId(params.id);
+        setNumeroCadeiras(params.numero_cadeiras);
+        setHorasFuncionamentoMes(Number(params.horas_funcionamento_mes));
+        setHorasOcupadasMes(Number(params.horas_ocupadas_mes));
+      } else {
+        setParamId(null);
+        setNumeroCadeiras(1);
+        setHorasFuncionamentoMes(160);
+        setHorasOcupadasMes(120);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar custos/parâmetros:', err);
+    }
+  };
+
+  // 2. Buscar insumos e saldos de estoque da unidade
+  const fetchInsumosAndEstoque = async () => {
+    if (!activeTenant || !selectedUnit) return;
+    try {
+      const { data: insumosData, error: insumosErr } = await supabase
+        .from('insumos')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .order('nome');
+      if (insumosErr) throw insumosErr;
+      setInsumos(insumosData || []);
+
+      const { data: estoqueData, error: estoqueErr } = await supabase
+        .from('estoque_unidade')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit);
+      if (estoqueErr) throw estoqueErr;
+      setEstoqueUnidade(estoqueData || []);
+    } catch (err) {
+      console.error('Erro ao buscar insumos/estoque:', err);
+    }
+  };
+
+  // 3. Buscar histórico de movimentações
   const fetchMovements = async () => {
     if (!activeTenant || !selectedUnit) return;
     try {
       const { data, error } = await supabase
         .from('movimentacoes_estoque')
-        .select(`
-          *,
-          insumo:insumos (
-            nome,
-            unidade_medida
-          )
-        `)
+        .select('*, insumo:insumos(nome, unidade_medida)')
         .eq('tenant_id', activeTenant.id)
         .eq('unit_id', selectedUnit)
-        .order('data', { ascending: false });
-
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (error) throw error;
       setMovements(data || []);
     } catch (err) {
@@ -112,23 +228,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
     }
   };
 
-  const fetchCustosFixos = async () => {
-    if (!activeTenant || !selectedUnit) return;
-    try {
-      const { data, error } = await supabase
-        .from('custos_fixos')
-        .select('*')
-        .eq('tenant_id', activeTenant.id)
-        .eq('unidade_id', selectedUnit)
-        .eq('competencia', competence);
-
-      if (error) throw error;
-      setCustosFixos(data || []);
-    } catch (err) {
-      console.error('Erro ao buscar custos fixos:', err);
-    }
-  };
-
+  // 4. Buscar procedimentos
   const fetchProcedures = async () => {
     if (!activeTenant) return;
     try {
@@ -144,299 +244,539 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
     }
   };
 
-  const fetchBOM = async (procId: string) => {
-    if (!activeTenant) return;
-    if (!procId) return setBomItems([]);
+  // 5. Buscar dados de rentabilidade da view
+  const fetchRentabilidade = async () => {
+    if (!activeTenant || !selectedUnit) return;
     try {
       const { data, error } = await supabase
-        .from('procedimento_insumos')
-        .select(`
-          *,
-          insumo:insumos(*)
-        `)
-        .eq('procedimento_id', procId)
-        .eq('tenant_id', activeTenant.id);
-
+        .from('vw_rentabilidade_procedimento')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .eq('unit_id', selectedUnit)
+        .order('margem_realizada_pct', { ascending: false });
       if (error) throw error;
-      setBomItems((data || []).map((item: any) => ({
-        insumo_id: item.insumo_id,
-        quantidade_padrao: item.quantidade_padrao
-      })));
+      setRentabilidadeData(data || []);
     } catch (err) {
-      console.error('Erro ao buscar BOM:', err);
+      console.error('Erro ao buscar rentabilidade:', err);
     }
   };
 
-  const fetchReport = async () => {
-    if (!activeTenant || !selectedUnit || !competence) return;
-    try {
-      // 1. Buscar procedimentos
-      const { data: procs, error: procErr } = await supabase
-        .from('procedures')
-        .select('*')
-        .eq('tenant_id', activeTenant.id)
-        .order('name');
-      if (procErr) throw procErr;
+  // 6. Carregar ficha técnica (BOM) e calculadora do procedimento selecionado
+  const loadProcedurePricingDetails = async (procId: string) => {
+    if (!procId || !activeTenant) {
+      setBomItems([]);
+      resetCalculatorParams();
+      return;
+    }
 
-      // 2. Buscar boms
-      const { data: boms, error: bomErr } = await supabase
+    try {
+      // BOM
+      const { data: bom, error: bomErr } = await supabase
         .from('procedimento_insumos')
-        .select(`
-          *,
-          insumo:insumos(*)
-        `)
+        .select('*, insumo:insumos(*)')
+        .eq('procedure_id', procId)
         .eq('tenant_id', activeTenant.id);
       if (bomErr) throw bomErr;
 
-      // 3. Buscar saldos de estoque da unidade
-      const { data: est, error: estErr } = await supabase
-        .from('estoque_unidade')
+      setBomItems((bom || []).map(b => ({
+        id: b.id,
+        insumo_id: b.insumo_id,
+        quantidade_usada_por_procedimento: Number(b.quantidade_usada_por_procedimento),
+        numero_consultas_necessarias: Number(b.numero_consultas_necessarias),
+        insumo: b.insumo
+      })));
+
+      // Parâmetros de custos
+      const { data: calc, error: calcErr } = await supabase
+        .from('procedimento_custos')
         .select('*')
+        .eq('procedure_id', procId)
         .eq('tenant_id', activeTenant.id)
-        .eq('unit_id', selectedUnit);
-      if (estErr) throw estErr;
+        .maybeSingle();
+      if (calcErr) throw calcErr;
 
-      // 4. Buscar custos fixos da unidade no mês
-      const { data: cFixos, error: cfErr } = await supabase
-        .from('custos_fixos')
-        .select('valor')
+      // Preço praticado atual do procedimento
+      const { data: proc, error: procErr } = await supabase
+        .from('procedures')
+        .select('preco_praticado')
+        .eq('id', procId)
         .eq('tenant_id', activeTenant.id)
-        .eq('unidade_id', selectedUnit)
-        .eq('competencia', competence);
-      if (cfErr) throw cfErr;
+        .single();
+      if (procErr) throw procErr;
+      setPrecoPraticado(Number(proc?.preco_praticado || 0));
 
-      const totalCustosFixos = (cFixos || []).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
-
-      // 5. Contar agendamentos confirmados (realizados) no mês
-      const [monthStr, yearStr] = competence.split('/');
-      const month = parseInt(monthStr, 10);
-      const year = parseInt(yearStr, 10);
-      const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextMonthYear = month === 12 ? year + 1 : year;
-      const endOfMonth = `${nextMonthYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
-
-      const { count: totalRealizados, error: countError } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', activeTenant.id)
-        .eq('unit_id', selectedUnit)
-        .eq('status', 'confirmed')
-        .gte('start_time', startOfMonth)
-        .lt('start_time', endOfMonth);
-
-      if (countError) throw countError;
-
-      const divisorProcedimentos = (totalRealizados && totalRealizados > 0) ? totalRealizados : 1;
-      const custoFixoRateado = totalCustosFixos / divisorProcedimentos;
-
-      // 6. Consolidar relatório
-      const report = (procs || []).map((proc: any) => {
-        const procBoms = (boms || []).filter((b: any) => b.procedimento_id === proc.id);
-        const custoMaterial = procBoms.reduce((acc: number, item: any) => {
-          const estItem = (est || []).find((e: any) => e.insumo_id === item.insumo_id);
-          const custoUnitario = estItem ? Number(estItem.custo_medio) : 0;
-          return acc + (Number(item.quantidade_padrao) * custoUnitario);
-        }, 0);
-
-        const custoTotal = custoMaterial + custoFixoRateado;
-        const valorCobrado = Number(proc.price);
-        const margemPercentual = valorCobrado > 0 ? ((valorCobrado - custoTotal) / valorCobrado) * 100 : 0;
-
-        return {
-          procedimento_id: proc.id,
-          procedimento_nome: proc.name,
-          valor_cobrado: valorCobrado,
-          custo_material: custoMaterial,
-          custo_fixo_rateado: custoFixoRateado,
-          custo_total: custoTotal,
-          margem_percentual: Number(margemPercentual.toFixed(2))
-        };
-      });
-
-      setReportData(report);
+      if (calc) {
+        setCustoMaterialEspecial(Number(calc.custo_material_especial));
+        setCustoTerceirosLaboratorio(Number(calc.custo_terceiros_laboratorio));
+        setTempoConsultaMinutos(Number(calc.tempo_consulta_minutos));
+        setNumeroSessoesTotal(Number(calc.numero_sessoes_total));
+        setComissaoProfissionalPct(Number(calc.comissao_professional_pct));
+        setTaxaCartaoPct(Number(calc.taxa_cartao_pct));
+        setImpostosPct(Number(calc.impostos_pct));
+        setMargemLucroDesejadaPct(Number(calc.margem_lucro_desejada_pct));
+        setOutrasDeducoesPct(Number(calc.outras_deducoes_pct));
+      } else {
+        resetCalculatorParams();
+      }
     } catch (err) {
-      console.error('Erro ao gerar relatório de lucratividade:', err);
+      console.error('Erro ao carregar detalhes da precificação:', err);
     }
   };
 
-  useEffect(() => {
-    if (activeTenant && selectedUnit) {
-      fetchInsumos();
-      fetchMovements();
-      fetchProcedures();
-    }
-  }, [selectedUnit, activeTenant]);
+  const resetCalculatorParams = () => {
+    setCustoMaterialEspecial(0);
+    setCustoTerceirosLaboratorio(0);
+    setTempoConsultaMinutos(30);
+    setNumeroSessoesTotal(1);
+    setComissaoProfissionalPct(0);
+    setTaxaCartaoPct(0);
+    setImpostosPct(0);
+    setMargemLucroDesejadaPct(0);
+    setOutrasDeducoesPct(0);
+  };
 
-  useEffect(() => {
-    if (activeTenant && selectedUnit && (activeTab === 'custos' || activeTab === 'margens')) {
-      fetchCustosFixos();
-      fetchReport();
-    }
-  }, [selectedUnit, competence, activeTab, activeTenant]);
+  // =========================================================================
+  // OPERAÇÕES DO BANCO DE DADOS (MUTATIONS)
+  // =========================================================================
 
-  // Cadastro de novo insumo
+  // 1. Custos Fixos & Parâmetros
+  const handleSaveParameters = async () => {
+    if (!activeTenant || !selectedUnit) return;
+    try {
+      const payload = {
+        tenant_id: activeTenant.id,
+        unit_id: selectedUnit,
+        numero_cadeiras: numeroCadeiras,
+        horas_funcionamento_mes: horasFuncionamentoMes,
+        horas_ocupadas_mes: horasOcupadasMes,
+        updated_at: new Date().toISOString()
+      };
+
+      let error;
+      if (paramId) {
+        const { error: err } = await supabase
+          .from('parametros_custo_unidade')
+          .update(payload)
+          .eq('id', paramId);
+        error = err;
+      } else {
+        const { data, error: err } = await supabase
+          .from('parametros_custo_unidade')
+          .insert([payload])
+          .select()
+          .single();
+        error = err;
+        if (data) setParamId(data.id);
+      }
+
+      if (error) throw error;
+      alert('Parâmetros salvos com sucesso!');
+      fetchParametersAndCosts();
+      fetchRentabilidade();
+    } catch (err: any) {
+      alert('Erro ao salvar parâmetros: ' + err.message);
+    }
+  };
+
+  const handleAddCustoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant || !selectedUnit) return;
+    try {
+      const { error } = await supabase
+        .from('custos_fixos')
+        .insert([{
+          tenant_id: activeTenant.id,
+          unit_id: selectedUnit,
+          nome_custo: formCusto.nome_custo,
+          valor_mensal: Number(formCusto.valor_mensal),
+          ativo: formCusto.ativo
+        }]);
+
+      if (error) throw error;
+      setIsNewCustoOpen(false);
+      setFormCusto({ nome_custo: '', valor_mensal: '', ativo: true });
+      fetchParametersAndCosts();
+      fetchRentabilidade();
+    } catch (err: any) {
+      alert('Erro ao lançar custo: ' + err.message);
+    }
+  };
+
+  const toggleCustoAtivo = async (id: string, current: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('custos_fixos')
+        .update({ ativo: !current, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      fetchParametersAndCosts();
+      fetchRentabilidade();
+    } catch (err: any) {
+      alert('Erro ao alterar status: ' + err.message);
+    }
+  };
+
+  const handleDeleteCusto = async (id: string) => {
+    if (!confirm('Deseja excluir este item de custo fixo?')) return;
+    try {
+      const { error } = await supabase
+        .from('custos_fixos')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      fetchParametersAndCosts();
+      fetchRentabilidade();
+    } catch (err: any) {
+      alert('Erro ao excluir custo: ' + err.message);
+    }
+  };
+
+  // 2. Insumos (CRUD)
   const handleAddInsumoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenant) return;
-    if (!formInsumo.nome || !formInsumo.estoque_minimo) return;
-
     try {
       const { error } = await supabase
         .from('insumos')
         .insert([{
+          tenant_id: activeTenant.id,
           nome: formInsumo.nome,
-          unidade_medida: formInsumo.unidade_medida,
-          estoque_minimo: Number(formInsumo.estoque_minimo),
           categoria: formInsumo.categoria,
-          status: 'ativo',
-          tenant_id: activeTenant.id
+          unidade_medida: formInsumo.unidade_medida,
+          quantidade_embalagem: Number(formInsumo.quantidade_embalagem),
+          quantidade_rendimento: Number(formInsumo.quantidade_rendimento),
+          preco_embalagem_atual: Number(formInsumo.preco_embalagem_atual),
+          estoque_minimo: Number(formInsumo.estoque_minimo),
+          ativo: formInsumo.ativo
         }]);
 
       if (error) throw error;
       setIsNewInsumoOpen(false);
-      fetchInsumos();
-      setFormInsumo({ nome: '', unidade_medida: 'unidade', estoque_minimo: '', categoria: 'Descartáveis' });
+      resetInsumoForm();
+      fetchInsumosAndEstoque();
     } catch (err: any) {
-      console.error('Erro ao adicionar insumo:', err);
-      alert('Erro ao adicionar insumo: ' + err.message);
+      alert('Erro ao salvar insumo: ' + err.message);
     }
   };
 
-  // Cadastro de nova compra
+  const handleEditInsumoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant || !selectedInsumoForEdit) return;
+    try {
+      const { error } = await supabase
+        .from('insumos')
+        .update({
+          nome: formInsumo.nome,
+          categoria: formInsumo.categoria,
+          unidade_medida: formInsumo.unidade_medida,
+          quantidade_embalagem: Number(formInsumo.quantidade_embalagem),
+          quantidade_rendimento: Number(formInsumo.quantidade_rendimento),
+          preco_embalagem_atual: Number(formInsumo.preco_embalagem_atual),
+          estoque_minimo: Number(formInsumo.estoque_minimo),
+          ativo: formInsumo.ativo,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedInsumoForEdit.id);
+
+      if (error) throw error;
+      setIsEditInsumoOpen(false);
+      setSelectedInsumoForEdit(null);
+      resetInsumoForm();
+      fetchInsumosAndEstoque();
+    } catch (err: any) {
+      alert('Erro ao atualizar insumo: ' + err.message);
+    }
+  };
+
+  const openEditInsumo = (insumo: any) => {
+    setSelectedInsumoForEdit(insumo);
+    setFormInsumo({
+      nome: insumo.nome,
+      categoria: insumo.categoria || 'Descartáveis',
+      unidade_medida: insumo.unidade_medida || 'unidade',
+      quantidade_embalagem: String(insumo.quantidade_embalagem),
+      quantidade_rendimento: String(insumo.quantidade_rendimento),
+      preco_embalagem_atual: String(insumo.preco_embalagem_atual),
+      estoque_minimo: String(insumo.estoque_minimo),
+      ativo: insumo.ativo
+    });
+    setIsEditInsumoOpen(true);
+  };
+
+  const resetInsumoForm = () => {
+    setFormInsumo({
+      nome: '',
+      categoria: 'Descartáveis',
+      unidade_medida: 'unidade',
+      quantidade_embalagem: '',
+      quantidade_rendimento: '',
+      preco_embalagem_atual: '',
+      estoque_minimo: '',
+      ativo: true
+    });
+  };
+
+  const toggleInsumoAtivo = async (id: string, current: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('insumos')
+        .update({ ativo: !current, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      fetchInsumosAndEstoque();
+    } catch (err: any) {
+      alert('Erro ao alterar status: ' + err.message);
+    }
+  };
+
+  // 3. Compras & Ajustes
   const handleAddCompraSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenant || !selectedUnit) return;
-    const { insumo_id, fornecedor, quantidade, valor_total, nota_fiscal } = formCompra;
-    if (!insumo_id || !fornecedor || !quantidade || !valor_total) return;
-
-    const valor_unitario = Number(valor_total) / Number(quantidade);
+    const { insumo_id, fornecedor, quantidade_comprada, preco_pago_embalagem, nota_fiscal } = formCompra;
+    if (!insumo_id || !quantidade_comprada || !preco_pago_embalagem) return;
 
     try {
       const { error } = await supabase.rpc('processar_compra_estoque', {
         p_insumo_id: insumo_id,
         p_unit_id: selectedUnit,
-        p_fornecedor: fornecedor,
-        p_quantidade: Number(quantidade),
-        p_valor_total: Number(valor_total),
-        p_valor_unitario: valor_unitario,
+        p_fornecedor: fornecedor || 'Diversos',
+        p_quantidade: Number(quantidade_comprada),
+        p_valor_total: Number(quantidade_comprada) * Number(preco_pago_embalagem),
+        p_valor_unitario: Number(preco_pago_embalagem),
         p_nota_fiscal: nota_fiscal || null,
         p_tenant_id: activeTenant.id
       });
 
       if (error) throw error;
-
       setIsNewCompraOpen(false);
-      fetchInsumos();
-      fetchMovements();
-      setFormCompra({ insumo_id: '', fornecedor: '', quantidade: '', valor_total: '', nota_fiscal: '' });
-      alert('Entrada registrada e custo médio atualizado com sucesso!');
+      setFormCompra({ insumo_id: '', fornecedor: '', quantidade_comprada: '', preco_pago_embalagem: '', nota_fiscal: '' });
+      await fetchInsumosAndEstoque();
+      await fetchMovements();
+      alert('Entrada registrada com sucesso! Custo da embalagem atualizado.');
     } catch (err: any) {
-      console.error('Erro ao processar compra de estoque:', err);
       alert('Erro ao registrar compra: ' + err.message);
     }
   };
 
-  // Cadastro de custo fixo
-  const handleAddCustoSubmit = async (e: React.FormEvent) => {
+  const handleAjusteManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenant || !selectedUnit) return;
-    if (!formCusto.nome || !formCusto.valor || !formCusto.competencia) return;
+    const { insumo_id, quantidade, tipo, motivo } = formAjuste;
+    if (!insumo_id || !quantidade) return;
 
     try {
-      const { error } = await supabase
-        .from('custos_fixos')
+      const qtyNum = Number(quantidade);
+      const stockChange = tipo === 'saida' ? -qtyNum : qtyNum;
+
+      // 1. Registrar movimentação
+      const { error: movErr } = await supabase
+        .from('movimentacoes_estoque')
         .insert([{
-          nome: formCusto.nome,
-          tipo: formCusto.tipo,
-          valor: Number(formCusto.valor),
-          competencia: formCusto.competencia,
-          unidade_id: selectedUnit,
-          tenant_id: activeTenant.id
+          tenant_id: activeTenant.id,
+          unit_id: selectedUnit,
+          insumo_id: insumo_id,
+          tipo: tipo,
+          quantidade: qtyNum,
+          motivo: motivo,
+          referencia_tipo: 'ajuste_manual'
         }]);
+      if (movErr) throw movErr;
 
-      if (error) throw error;
+      // 2. Atualizar estoque
+      const { error: upsertErr } = await supabase
+        .from('estoque_unidade')
+        .upsert({
+          tenant_id: activeTenant.id,
+          unit_id: selectedUnit,
+          insumo_id: insumo_id,
+          quantidade_atual: (estoqueUnidade.find(e => e.insumo_id === insumo_id)?.quantidade_atual || 0) + stockChange,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'unit_id, insumo_id' });
 
-      setIsNewCustoOpen(false);
-      fetchCustosFixos();
-      fetchReport();
-      setFormCusto({ nome: '', tipo: 'fixo_mensal', valor: '', competencia: competence });
+      if (upsertErr) throw upsertErr;
+
+      setIsAjusteManualOpen(false);
+      setFormAjuste({ insumo_id: '', quantidade: '', tipo: 'saida', motivo: 'perda' });
+      await fetchInsumosAndEstoque();
+      await fetchMovements();
+      alert('Estoque ajustado com sucesso!');
     } catch (err: any) {
-      console.error('Erro ao adicionar custo fixo:', err);
-      alert('Erro ao cadastrar custo: ' + err.message);
+      alert('Erro ao ajustar estoque: ' + err.message);
     }
   };
 
-  // Salvar Ficha Técnica (BOM)
-  const handleSaveBOM = async () => {
+  // 4. Precificação por Procedimento (Salvar)
+  const handleSavePrecificacao = async () => {
     if (!activeTenant || !selectedProcedure) return;
-    
+
+    // Validar soma de taxas
+    const somaPercentuais = comissaoProfissionalPct + taxaCartaoPct + impostosPct + margemLucroDesejadaPct + outrasDeducoesPct;
+    if (somaPercentuais >= 100) {
+      alert('Erro: A soma das comissões, taxas de cartão, impostos, margem e outras deduções não pode ser igual ou maior que 100%!');
+      return;
+    }
+
     try {
-      // 1. Remover registros antigos
-      const { error: deleteError } = await supabase
-        .from('procedimento_insumos')
-        .delete()
-        .eq('procedimento_id', selectedProcedure)
+      // 1. Salvar os parâmetros de custos do procedimento
+      const { error: calcErr } = await supabase
+        .from('procedimento_custos')
+        .upsert({
+          tenant_id: activeTenant.id,
+          procedure_id: selectedProcedure,
+          custo_material_especial: custoMaterialEspecial,
+          custo_terceiros_laboratorio: custoTerceirosLaboratorio,
+          tempo_consulta_minutos: tempoConsultaMinutos,
+          numero_sessoes_total: numeroSessoesTotal,
+          comissao_professional_pct: comissaoProfissionalPct,
+          taxa_cartao_pct: taxaCartaoPct,
+          impostos_pct: impostosPct,
+          margem_lucro_desejada_pct: margemLucroDesejadaPct,
+          outras_deducoes_pct: outrasDeducoesPct,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'procedure_id' });
+
+      if (calcErr) throw calcErr;
+
+      // 2. Atualizar o preço praticado na tabela procedures
+      const { error: procErr } = await supabase
+        .from('procedures')
+        .update({
+          preco_praticado: precoPraticado,
+          categoria_especialidade: selectedCategory !== 'Todos' ? selectedCategory : null
+        })
+        .eq('id', selectedProcedure)
         .eq('tenant_id', activeTenant.id);
 
-      if (deleteError) throw deleteError;
+      if (procErr) throw procErr;
 
-      // 2. Inserir novos registros
-      if (bomItems && bomItems.length > 0) {
-        const insertRows = bomItems.map((item: any) => ({
-          procedimento_id: selectedProcedure,
-          insumo_id: item.insumo_id,
-          quantidade_padrao: Number(item.quantidade_padrao),
-          tenant_id: activeTenant.id
-        }));
+      // 3. Salvar BOM (procedimento_insumos): Limpar antigos e gravar novos
+      const { error: delErr } = await supabase
+        .from('procedimento_insumos')
+        .delete()
+        .eq('procedure_id', selectedProcedure)
+        .eq('tenant_id', activeTenant.id);
+      if (delErr) throw delErr;
 
-        const { error: insertError } = await supabase
+      const validBoms = bomItems.filter(b => b.insumo_id && b.quantidade_usada_por_procedimento > 0);
+      if (validBoms.length > 0) {
+        const { error: insErr } = await supabase
           .from('procedimento_insumos')
-          .insert(insertRows);
-
-        if (insertError) throw insertError;
+          .insert(validBoms.map(b => ({
+            tenant_id: activeTenant.id,
+            procedure_id: selectedProcedure,
+            insumo_id: b.insumo_id,
+            quantidade_usada_por_procedimento: b.quantidade_usada_por_procedimento,
+            numero_consultas_necessarias: b.numero_consultas_necessarias
+          })));
+        if (insErr) throw insErr;
       }
 
-      alert('Ficha Técnica (BOM) atualizada com sucesso!');
+      alert('Precificação e Ficha Técnica salvas com sucesso!');
+      await fetchProcedures();
+      await fetchRentabilidade();
+      await loadProcedurePricingDetails(selectedProcedure);
     } catch (err: any) {
-      console.error('Erro ao salvar ficha técnica:', err);
-      alert('Erro ao atualizar BOM: ' + err.message);
+      alert('Erro ao salvar precificação: ' + err.message);
     }
   };
 
+  // Manipulações locais da lista de BOM
   const handleAddBOMRow = () => {
-    setBomItems([...bomItems, { insumo_id: '', quantidade_padrao: 1 }]);
+    setBomItems([...bomItems, { insumo_id: '', quantidade_usada_por_procedimento: 1, numero_consultas_necessarias: 1 }]);
   };
 
   const handleRemoveBOMRow = (idx: number) => {
     setBomItems(bomItems.filter((_, i) => i !== idx));
   };
 
-  const handleBOMChange = (idx: number, field: string, val: any) => {
+  const handleBOMChange = (idx: number, field: string, value: any) => {
     const updated = [...bomItems];
-    updated[idx] = { ...updated[idx], [field]: val };
+    if (field === 'insumo_id') {
+      const selectedInsumo = insumos.find(i => i.id === value);
+      updated[idx] = { 
+        ...updated[idx], 
+        insumo_id: value, 
+        insumo: selectedInsumo 
+      };
+    } else {
+      updated[idx] = { ...updated[idx], [field]: Number(value) };
+    }
     setBomItems(updated);
   };
 
-  // Verifica se há alertas de estoque mínimo
-  const lowStockInsumos = insumos.filter(i => i.quantidade_atual < i.estoque_minimo);
+  // =========================================================================
+  // FÓRMULAS DE CÁLCULO E LÓGICA DE NEGÓCIO (EM TEMPO REAL)
+  // =========================================================================
 
-  // Segurança de dados financeiros
-  const isAdmin = role === 'admin' || role === 'clinic_owner' || role === 'super_admin';
+  // 1. Custo Hora Clínica
+  const totalCustosFixosMensais = custosFixos
+    .filter(cf => cf.ativo)
+    .reduce((acc, curr) => acc + Number(curr.valor_mensal), 0);
+
+  const calculatedCustoHoraClinica = horasOcupadasMes > 0 
+    ? totalCustosFixosMensais / horasOcupadasMes 
+    : 0;
+
+  // 2. Custo de Insumos da BOM
+  const calculatedCustoMaterialGeral = bomItems.reduce((acc, b) => {
+    if (!b.insumo_id || !b.insumo) return acc;
+    const preco = Number(b.insumo.preco_embalagem_atual || 0);
+    const rendimento = Number(b.insumo.quantidade_rendimento || 1);
+    const qtyUsada = Number(b.quantidade_usada_por_procedimento || 0);
+    const sessoesNecessarias = Number(b.numero_consultas_necessarias || 1);
+
+    const valorPorConsulta = rendimento > 0 ? (preco / rendimento) * qtyUsada : 0;
+    return acc + (valorPorConsulta * sessoesNecessarias);
+  }, 0);
+
+  // 3. Calculadora de Procedimento
+  const custoPorConsultaTempo = (tempoConsultaMinutos / 60) * calculatedCustoHoraClinica;
+  const custoFixoProcedimento = calculatedCustoMaterialGeral + custoMaterialEspecial + custoTerceirosLaboratorio;
+  const custoTotalProcedimento = (custoPorConsultaTempo * numeroSessoesTotal) + custoFixoProcedimento;
+
+  const totalDeducoesPct = comissaoProfissionalPct + taxaCartaoPct + impostosPct + margemLucroDesejadaPct + outrasDeducoesPct;
+  
+  const markupDivisor = totalDeducoesPct < 100 
+    ? 1 / (1 - (totalDeducoesPct / 100)) 
+    : null;
+
+  const valorSugeridoCobranca = markupDivisor 
+    ? custoTotalProcedimento * markupDivisor 
+    : 0;
+
+  // Filtrar procedimentos
+  const filteredProcedures = procedures.filter(p => {
+    if (selectedCategory === 'Todos') return true;
+    return p.categoria_especialidade === selectedCategory;
+  });
+
+  // Categorias para filtro
+  const categoriesList = [
+    'Todos', 
+    'Endodontia', 
+    'Dentística', 
+    'Prótese', 
+    'Odontopediatria', 
+    'Cirurgia', 
+    'Implantodontia', 
+    'Periodontia', 
+    'Harmonização Facial'
+  ];
 
   return (
     <div className={styles.container}>
       {/* Top Header */}
       <div className={styles.headerSection}>
         <div>
-          <h1 className={styles.title}>Custos & Estoque</h1>
-          <p className={styles.subtitle}>Gerenciamento inteligente de insumos clínicos, fichas técnicas e rateios.</p>
+          <h1 className={styles.title}>Precificação & Custos</h1>
+          <p className={styles.subtitle}>Gerenciamento de margens, hora clínica, estoque e custos fixos em tempo real.</p>
         </div>
         
         <div className={styles.roleToggle}>
-          <span>Perfil Ativo: </span>
-          <strong style={{ textTransform: 'capitalize', marginLeft: '6px', color: 'hsl(var(--primary))' }}>
-            {role === 'clinic_owner' ? 'Proprietário' : role === 'admin' ? 'Administrador' : role === 'dentist' ? 'Dentista' : role === 'receptionist' ? 'Recepcionista' : role}
+          <span>Unidade Selecionada: </span>
+          <strong style={{ color: 'hsl(var(--primary))', marginLeft: '6px' }}>
+            {estoqueUnidade.length > 0 ? 'Ativa' : 'Sem Estoque Lançado'}
           </strong>
         </div>
       </div>
@@ -448,109 +788,279 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
           className={`${styles.tabButton} ${activeTab === 'estoque' ? styles.activeTab : ''}`}
         >
           <Boxes size={16} />
-          Estoque Atual
+          Estoque & Movimentações
         </button>
         <button 
-          onClick={() => setActiveTab('compras')} 
-          className={`${styles.tabButton} ${activeTab === 'compras' ? styles.activeTab : ''}`}
-        >
-          <History size={16} />
-          Compras & Entradas
-        </button>
-        <button 
-          onClick={() => setActiveTab('bom')} 
-          className={`${styles.tabButton} ${activeTab === 'bom' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('insumos')} 
+          className={`${styles.tabButton} ${activeTab === 'insumos' ? styles.activeTab : ''}`}
         >
           <SlidersHorizontal size={16} />
-          Fichas Técnicas (BOM)
+          Catálogo de Insumos
         </button>
         <button 
           onClick={() => setActiveTab('custos')} 
           className={`${styles.tabButton} ${activeTab === 'custos' ? styles.activeTab : ''}`}
         >
           <DollarSign size={16} />
-          Custos Fixos
+          Custos Fixos da Clínica
         </button>
         <button 
-          onClick={() => setActiveTab('margens')} 
-          className={`${styles.tabButton} ${activeTab === 'margens' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('precificacao')} 
+          className={`${styles.tabButton} ${activeTab === 'precificacao' ? styles.activeTab : ''}`}
+        >
+          <Calculator size={16} />
+          Precificação por Procedimento
+        </button>
+        <button 
+          onClick={() => setActiveTab('rentabilidade')} 
+          className={`${styles.tabButton} ${activeTab === 'rentabilidade' ? styles.activeTab : ''}`}
         >
           <LineChart size={16} />
-          Custos & Margens por Procedimento
+          Dashboard de Rentabilidade
         </button>
       </div>
 
-      {/* Alerta Geral de Estoque Mínimo */}
-      {activeTab === 'estoque' && lowStockInsumos.length > 0 && (
-        <div className={styles.alertBox}>
-          <AlertTriangle size={20} />
-          <div>
-            <strong>Alerta de Reabastecimento!</strong>
-            <p>Os seguintes insumos estão abaixo do estoque mínimo: {lowStockInsumos.map(i => `${i.nome} (${i.quantidade_atual} ${i.unidade_medida}s)`).join(', ')}.</p>
+      {/* =========================================================================
+          ABA 1: ESTOQUE & MOVIMENTAÇÕES
+          ========================================================================= */}
+      {activeTab === 'estoque' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Alerta de estoque baixo */}
+          {insumos.filter(i => {
+            const est = estoqueUnidade.find(e => e.insumo_id === i.id);
+            const qty = est ? Number(est.quantidade_atual) : 0;
+            return qty < Number(i.estoque_minimo) && i.ativo;
+          }).length > 0 && (
+            <div className={styles.alertBox}>
+              <AlertTriangle size={20} />
+              <div>
+                <strong>Atenção: Itens com Estoque Crítico!</strong>
+                <p>
+                  Existem materiais com quantidade atual abaixo do estoque mínimo de segurança.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryCard}>
+              <div className={styles.cardTitle}><Boxes size={16} /> Saldo de Itens</div>
+              <div className={styles.cardValue}>{insumos.filter(i => i.ativo).length}</div>
+            </div>
+            <div className={styles.summaryCard}>
+              <div className={styles.cardTitle} style={{ color: 'hsl(var(--danger))' }}><AlertTriangle size={16} /> Estoque Crítico</div>
+              <div className={styles.cardValue} style={{ color: 'hsl(var(--danger))' }}>
+                {insumos.filter(i => {
+                  const est = estoqueUnidade.find(e => e.insumo_id === i.id);
+                  const qty = est ? Number(est.quantidade_atual) : 0;
+                  return qty < Number(i.estoque_minimo) && i.ativo;
+                }).length}
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.contentCard}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Saldos Atuais em Estoque</h2>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={fetchAll} className={styles.secondaryBtn} title="Atualizar">
+                  <RefreshCw size={14} />
+                </button>
+                {isAdmin && (
+                  <>
+                    <button onClick={() => setIsAjusteManualOpen(true)} className={styles.secondaryBtn}>
+                      Ajuste Manual
+                    </button>
+                    <button onClick={() => setIsNewCompraOpen(true)} className={styles.primaryBtn}>
+                      <Plus size={14} />
+                      Registrar Compra
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Material / Insumo</th>
+                    <th>Categoria</th>
+                    <th>Estoque Mínimo</th>
+                    <th>Saldo Atual (Uso)</th>
+                    <th>Preço Embalagem</th>
+                    <th>Custo Unitário</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insumos.length > 0 ? (
+                    insumos.map(i => {
+                      const est = estoqueUnidade.find(e => e.insumo_id === i.id);
+                      const qty = est ? Number(est.quantidade_atual) : 0;
+                      const isLow = qty < Number(i.estoque_minimo);
+                      const unitCost = Number(i.quantidade_rendimento) > 0 
+                        ? Number(i.preco_embalagem_atual) / Number(i.quantidade_rendimento) 
+                        : 0;
+
+                      return (
+                        <tr key={i.id} style={{ opacity: i.ativo ? 1 : 0.5 }}>
+                          <td style={{ fontWeight: 600 }}>{i.nome}</td>
+                          <td>{i.categoria || 'Geral'}</td>
+                          <td>{i.estoque_minimo} {i.unidade_medida}s</td>
+                          <td style={{ fontWeight: 700 }}>
+                            <span style={{ color: isLow ? 'hsl(var(--danger))' : 'inherit' }}>
+                              {qty.toFixed(2)}
+                            </span>
+                            {isLow && (
+                              <span className={`${styles.badge} ${styles.badgeLowStock}`} style={{ marginLeft: '8px' }}>
+                                Crítico
+                              </span>
+                            )}
+                          </td>
+                          <td>R$ {Number(i.preco_embalagem_atual).toFixed(2)}</td>
+                          <td>R$ {unitCost.toFixed(4)}</td>
+                          <td>
+                            <span className={`${styles.badge} ${i.ativo ? styles.badgeNormal : styles.badgeLowStock}`}>
+                              {i.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum insumo cadastrado no sistema.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Histórico de Movimentações */}
+          <div className={styles.contentCard}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Histórico Recente de Movimentações</h2>
+            </div>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Insumo</th>
+                    <th>Tipo</th>
+                    <th>Quantidade (Uso)</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.length > 0 ? (
+                    movements.map(m => (
+                      <tr key={m.id}>
+                        <td>{new Date(m.created_at).toLocaleString('pt-BR')}</td>
+                        <td style={{ fontWeight: 500 }}>{m.insumo?.nome || 'Insumo Excluído'}</td>
+                        <td>
+                          <span className={`${styles.badge} ${
+                            m.tipo === 'entrada' ? styles.badgeNormal : 
+                            m.tipo === 'saida' ? styles.badgeLowStock : 
+                            styles.badgeWarning
+                          }`}>
+                            {m.tipo === 'entrada' ? 'Entrada' : m.tipo === 'saida' ? 'Saída' : 'Ajuste'}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>
+                          {m.tipo === 'saida' ? '-' : '+'}{Number(m.quantidade).toFixed(2)}
+                        </td>
+                        <td>{m.motivo}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>Nenhuma movimentação registrada nesta unidade.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          ABA 1: ESTOQUE ATUAL
+          ABA 2: CATÁLOGO DE INSUMOS
           ========================================================================= */}
-      {activeTab === 'estoque' && (
+      {activeTab === 'insumos' && (
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Saldo de Insumos</h2>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={fetchInsumos} className={styles.secondaryBtn} title="Recarregar saldos">
-                <RefreshCw size={14} className={loading ? 'spin' : ''} />
-              </button>
-              <button onClick={() => setIsNewInsumoOpen(true)} className={styles.primaryBtn}>
+            <h2 className={styles.sectionTitle}>Materiais e Insumos Cadastrados</h2>
+            {isAdmin && (
+              <button onClick={() => { resetInsumoForm(); setIsNewInsumoOpen(true); }} className={styles.primaryBtn}>
                 <Plus size={14} />
-                <span>Novo Insumo</span>
+                Cadastrar Material
               </button>
-            </div>
+            )}
           </div>
 
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Insumo</th>
+                  <th>Nome do Material</th>
                   <th>Categoria</th>
-                  <th>Unidade Medida</th>
+                  <th>Medida</th>
+                  <th>Qtd. Embalagem</th>
+                  <th>Rendimento (Usos)</th>
+                  <th>Preço Embalagem</th>
+                  <th>Custo Unitário</th>
                   <th>Estoque Mínimo</th>
-                  <th>Saldo Atual</th>
-                  <th>Custo Médio Ponderado</th>
                   <th>Status</th>
+                  {isAdmin && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
                 {insumos.length > 0 ? (
-                  insumos.map(i => (
-                    <tr key={i.id}>
-                      <td style={{ fontWeight: '600' }}>{i.nome}</td>
-                      <td>{i.categoria || 'Geral'}</td>
-                      <td>{i.unidade_medida}</td>
-                      <td>{i.estoque_minimo}</td>
-                      <td style={{ fontWeight: '700' }}>
-                        <span className={i.quantidade_atual < i.estoque_minimo ? styles.profitNegative : ''}>
-                          {i.quantidade_atual}
-                        </span>
-                        {i.quantidade_atual < i.estoque_minimo && (
-                          <span className={`${styles.badge} ${styles.badgeLowStock}`} style={{ marginLeft: '8px' }}>
-                            Abaixo do Mínimo
+                  insumos.map(i => {
+                    const unitCost = Number(i.quantidade_rendimento) > 0 
+                      ? Number(i.preco_embalagem_atual) / Number(i.quantidade_rendimento) 
+                      : 0;
+
+                    return (
+                      <tr key={i.id} style={{ opacity: i.ativo ? 1 : 0.6 }}>
+                        <td style={{ fontWeight: 600 }}>{i.nome}</td>
+                        <td>{i.categoria || 'Sem categoria'}</td>
+                        <td>{i.unidade_medida}</td>
+                        <td>{i.quantidade_embalagem}</td>
+                        <td>{i.quantidade_rendimento} usos</td>
+                        <td>R$ {Number(i.preco_embalagem_atual).toFixed(2)}</td>
+                        <td style={{ fontWeight: 600, color: 'hsl(var(--primary))' }}>
+                          R$ {unitCost.toFixed(4)}
+                        </td>
+                        <td>{i.estoque_minimo}</td>
+                        <td>
+                          <span 
+                            onClick={() => isAdmin && toggleInsumoAtivo(i.id, i.ativo)}
+                            className={`${styles.badge} ${i.ativo ? styles.badgeNormal : styles.badgeLowStock}`}
+                            style={{ cursor: isAdmin ? 'pointer' : 'default' }}
+                          >
+                            {i.ativo ? 'Ativo' : 'Inativo'}
                           </span>
+                        </td>
+                        {isAdmin && (
+                          <td>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={() => openEditInsumo(i)} className={styles.closeBtn} title="Editar">
+                                <Edit2 size={14} />
+                              </button>
+                            </div>
+                          </td>
                         )}
-                      </td>
-                      <td>R$ {Number(i.custo_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                      <td>
-                        <span className={`${styles.badge} ${i.status === 'ativo' ? styles.badgeNormal : styles.badgeLowStock}`}>
-                          {i.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum insumo cadastrado ou carregando...</td>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '24px' }}>Nenhum material no catálogo.</td>
                   </tr>
                 )}
               </tbody>
@@ -560,248 +1070,488 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
       )}
 
       {/* =========================================================================
-          ABA 2: COMPRAS & ENTRADAS (RESTRITO ADMIN)
+          ABA 3: CUSTOS FIXOS
           ========================================================================= */}
-      {activeTab === 'compras' && (
-        !isAdmin ? (
-          <div className={styles.contentCard}>
-            <div className={styles.restrictedArea}>
-              <Lock size={48} style={{ color: 'hsl(var(--danger))' }} />
-              <h3 className={styles.restrictedTitle}>Acesso Restrito</h3>
-              <p className={styles.restrictedText}>A visualização de registros de compras e lançamentos de custo médio é confidencial e permitida apenas para Administradores.</p>
+      {activeTab === 'custos' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Painel Operacional de Parâmetros e Hora Clínica */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px' }}>
+            <div className={styles.contentCard}>
+              <h2 className={styles.sectionTitle} style={{ marginBottom: '12px' }}>Parâmetros Operacionais da Unidade</h2>
+              <div className={styles.form} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className={styles.formGroup}>
+                  <label>Consultórios / Cadeiras Ativas</label>
+                  <input 
+                    type="number" 
+                    className={styles.input}
+                    value={numeroCadeiras}
+                    onChange={(e) => setNumeroCadeiras(Math.max(1, parseInt(e.target.value) || 1))}
+                    disabled={!isAdmin}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Horas Funcionamento Mês (Por cadeira)</label>
+                  <input 
+                    type="number" 
+                    className={styles.input}
+                    value={horasFuncionamentoMes}
+                    onChange={(e) => setHorasFuncionamentoMes(Math.max(0, parseFloat(e.target.value) || 0))}
+                    disabled={!isAdmin}
+                  />
+                </div>
+                <div className={styles.formGroup} style={{ gridColumn: 'span 2' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label>Horas Ocupadas Mês (Rateio real)</label>
+                    {isAdmin && (
+                      <button 
+                        type="button" 
+                        onClick={() => setHorasOcupadasMes(numeroCadeiras * horasFuncionamentoMes)}
+                        style={{ fontSize: '11px', color: 'hsl(var(--primary))', border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Sugerir Automático ({numeroCadeiras * horasFuncionamentoMes}h)
+                      </button>
+                    )}
+                  </div>
+                  <input 
+                    type="number" 
+                    className={styles.input}
+                    value={horasOcupadasMes}
+                    onChange={(e) => setHorasOcupadasMes(Math.max(0, parseFloat(e.target.value) || 0))}
+                    disabled={!isAdmin}
+                  />
+                </div>
+              </div>
+              {isAdmin && (
+                <button 
+                  onClick={handleSaveParameters} 
+                  className={styles.primaryBtn} 
+                  style={{ marginTop: '16px', alignSelf: 'flex-start' }}
+                >
+                  <Save size={14} />
+                  Salvar Parâmetros
+                </button>
+              )}
+            </div>
+
+            {/* Painel do custo de Hora Clínica */}
+            <div className={styles.contentCard} style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(135deg, hsl(var(--primary-light)) 0%, rgba(124,58,237,0.05) 100%)', borderColor: 'rgba(124,58,237,0.2)' }}>
+              <MoneyIcon size={40} style={{ color: 'hsl(var(--primary))', marginBottom: '12px' }} />
+              <span style={{ fontSize: '14px', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>Custo Hora Clínica Calculado</span>
+              <h2 className="gradient-text" style={{ fontSize: '38px', fontWeight: 800, margin: '8px 0' }}>
+                R$ {calculatedCustoHoraClinica.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h2>
+              <div style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', maxWidth: '200px' }}>
+                Baseado em R$ {totalCustosFixosMensais.toFixed(2)} de despesas fixas ativas e {horasOcupadasMes} horas de rateio ocupadas.
+              </div>
             </div>
           </div>
-        ) : (
+
+          {/* Listagem de Custos Fixos */}
           <div className={styles.contentCard}>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Histórico de Compras & Movimentações</h2>
-              <button onClick={() => setIsNewCompraOpen(true)} className={styles.primaryBtn}>
-                <Plus size={14} />
-                <span>Registrar Entrada</span>
-              </button>
+              <h2 className={styles.sectionTitle}>Lista de Despesas Fixas Mensais</h2>
+              {isAdmin && (
+                <button onClick={() => setIsNewCustoOpen(true)} className={styles.primaryBtn}>
+                  <Plus size={14} />
+                  Adicionar Despesa
+                </button>
+              )}
             </div>
 
             <div className={styles.tableWrapper}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Data</th>
-                    <th>Insumo</th>
-                    <th>Tipo</th>
-                    <th>Origem</th>
-                    <th>Quantidade</th>
-                    <th>Unidade Medida</th>
+                    <th>Nome do Custo</th>
+                    <th>Valor Mensal</th>
+                    <th>Status</th>
+                    {isAdmin && <th>Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.length > 0 ? (
-                    movements.map((mov, idx) => (
-                      <tr key={mov.id || idx}>
-                        <td>{new Date(mov.data).toLocaleString('pt-BR')}</td>
-                        <td style={{ fontWeight: '500' }}>{mov.insumo?.nome}</td>
+                  {custosFixos.length > 0 ? (
+                    custosFixos.map(cf => (
+                      <tr key={cf.id} style={{ opacity: cf.ativo ? 1 : 0.5 }}>
+                        <td style={{ fontWeight: 600 }}>{cf.nome_custo}</td>
+                        <td style={{ fontWeight: 700, color: 'hsl(var(--danger))' }}>
+                          R$ {Number(cf.valor_mensal).toFixed(2)}
+                        </td>
                         <td>
-                          <span className={`${styles.badge} ${
-                            mov.tipo === 'entrada' ? styles.badgeNormal : 
-                            mov.tipo === 'saida' ? styles.badgeLowStock : 
-                            styles.badgeWarning
-                          }`}>
-                            {mov.tipo}
+                          <span 
+                            onClick={() => isAdmin && toggleCustoAtivo(cf.id, cf.ativo)}
+                            className={`${styles.badge} ${cf.ativo ? styles.badgeNormal : styles.badgeLowStock}`}
+                            style={{ cursor: isAdmin ? 'pointer' : 'default' }}
+                          >
+                            {cf.ativo ? 'Ativo' : 'Inativo'}
                           </span>
                         </td>
-                        <td>{mov.origem}</td>
-                        <td style={{ fontWeight: '600' }}>
-                          {mov.tipo === 'saida' ? '-' : '+'}{mov.quantidade}
-                        </td>
-                        <td>{mov.insumo?.unidade_medida}</td>
+                        {isAdmin && (
+                          <td>
+                            <button onClick={() => handleDeleteCusto(cf.id)} className={styles.removeBtn} title="Excluir">
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>Nenhuma movimentação registrada.</td>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px' }}>Nenhum custo fixo lançado nesta unidade.</td>
+                    </tr>
+                  )}
+                  {custosFixos.length > 0 && (
+                    <tr style={{ background: 'hsl(var(--bg-app))', fontWeight: 700 }}>
+                      <td>Total Custos Fixos Ativos</td>
+                      <td style={{ color: 'hsl(var(--danger))' }}>
+                        R$ {totalCustosFixosMensais.toFixed(2)}
+                      </td>
+                      <td colSpan={isAdmin ? 2 : 1}></td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-        )
+        </div>
       )}
 
       {/* =========================================================================
-          ABA 3: FICHAS TÉCNICAS (BOM)
+          ABA 4: PRECIFICAÇÃO POR PROCEDIMENTO
           ========================================================================= */}
-      {activeTab === 'bom' && (
-        <div className={styles.contentCard}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Composição dos Procedimentos (BOM)</h2>
+      {activeTab === 'precificacao' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Seletor de Especialidade e Procedimento */}
+          <div className={styles.contentCard} style={{ display: 'flex', flexDirection: 'row', gap: '24px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={styles.formGroup} style={{ flex: 1, minWidth: '200px' }}>
+              <label>Filtro por Especialidade</label>
+              <select 
+                className={styles.select}
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setSelectedProcedure('');
+                  setBomItems([]);
+                  resetCalculatorParams();
+                }}
+              >
+                {categoriesList.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className={styles.formGroup} style={{ flex: 2, minWidth: '300px' }}>
+              <label>Selecione um Procedimento</label>
+              <select 
+                className={styles.select}
+                value={selectedProcedure}
+                onChange={(e) => {
+                  setSelectedProcedure(e.target.value);
+                  loadProcedurePricingDetails(e.target.value);
+                }}
+              >
+                <option value="">Selecione o procedimento...</option>
+                {filteredProcedures.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className={styles.formGroup} style={{ maxWidth: '400px' }}>
-            <label>Selecione um Procedimento</label>
-            <select 
-              className={styles.select}
-              value={selectedProcedure}
-              onChange={(e) => {
-                setSelectedProcedure(e.target.value);
-                fetchBOM(e.target.value);
-              }}
-            >
-              <option value="">Selecione o procedimento...</option>
-              {procedures.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {selectedProcedure && (
-            <div className={styles.bomList}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', marginTop: '12px' }}>Insumos Consumidos (Padrão)</h3>
+          {selectedProcedure ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '24px', alignItems: 'start' }}>
               
-              {bomItems.map((item, idx) => (
-                <div key={idx} className={styles.bomGrid}>
-                  <select 
-                    className={styles.select}
-                    value={item.insumo_id}
-                    onChange={(e) => handleBOMChange(idx, 'insumo_id', e.target.value)}
-                  >
-                    <option value="">Selecione o Insumo...</option>
-                    {insumos.map(i => (
-                      <option key={i.id} value={i.id}>{i.nome} ({i.unidade_medida})</option>
-                    ))}
-                  </select>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="Qtd padrão" 
-                    className={styles.input}
-                    value={item.quantidade_padrao}
-                    onChange={(e) => handleBOMChange(idx, 'quantidade_padrao', e.target.value)}
-                  />
-                  <button onClick={() => handleRemoveBOMRow(idx)} className={styles.removeBtn}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+              {/* Coluna Esquerda: BOM */}
+              <div className={styles.contentCard}>
+                <h3 className={styles.sectionTitle} style={{ borderBottom: '1px solid hsl(var(--border-color))', paddingBottom: '12px', marginBottom: '8px' }}>
+                  Ficha Técnica de Materiais (BOM)
+                </h3>
+                
+                <div className={styles.bomList}>
+                  {bomItems.map((item, idx) => {
+                    const preco = Number(item.insumo?.preco_embalagem_atual || 0);
+                    const rendimento = Number(item.insumo?.quantidade_rendimento || 1);
+                    const costPerConsult = rendimento > 0 ? (preco / rendimento) * item.quantidade_usada_por_procedimento : 0;
+                    const totalRowCost = costPerConsult * item.numero_consultas_necessarias;
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                <button onClick={handleAddBOMRow} className={styles.secondaryBtn}>
-                  Adicionar Insumo
+                    return (
+                      <div key={idx} className={styles.bomGrid} style={{ background: 'hsl(var(--bg-app))', padding: '12px', borderRadius: '8px', border: '1px solid hsl(var(--border-color))' }}>
+                        <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Material {idx + 1}</span>
+                          <button onClick={() => handleRemoveBOMRow(idx)} className={styles.removeBtn} style={{ padding: '2px' }}>
+                            <Trash size={14} />
+                          </button>
+                        </div>
+
+                        <div className={styles.formGroup} style={{ gridColumn: 'span 3' }}>
+                          <select 
+                            className={styles.select}
+                            style={{ padding: '6px 10px', fontSize: '13px' }}
+                            value={item.insumo_id}
+                            onChange={(e) => handleBOMChange(idx, 'insumo_id', e.target.value)}
+                          >
+                            <option value="">Selecione o Insumo...</option>
+                            {insumos.filter(i => i.ativo).map(i => (
+                              <option key={i.id} value={i.id}>{i.nome} ({i.unidade_medida})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className={styles.formGroup}>
+                          <label style={{ fontSize: '11px' }}>Qtd por Uso</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            className={styles.input}
+                            style={{ padding: '6px 10px', fontSize: '13px' }}
+                            value={item.quantidade_usada_por_procedimento}
+                            onChange={(e) => handleBOMChange(idx, 'quantidade_usada_por_procedimento', e.target.value)}
+                          />
+                        </div>
+
+                        <div className={styles.formGroup}>
+                          <label style={{ fontSize: '11px' }}>Consultas</label>
+                          <input 
+                            type="number" 
+                            step="0.5" 
+                            className={styles.input}
+                            style={{ padding: '6px 10px', fontSize: '13px' }}
+                            value={item.numero_consultas_necessarias}
+                            onChange={(e) => handleBOMChange(idx, 'numero_consultas_necessarias', e.target.value)}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: '6px', fontSize: '12px', textAlign: 'right' }}>
+                          <span style={{ color: 'hsl(var(--text-muted))' }}>Custo Total</span>
+                          <strong style={{ fontSize: '13px', color: 'hsl(var(--text-main))' }}>R$ {totalRowCost.toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button onClick={handleAddBOMRow} className={styles.secondaryBtn} style={{ marginTop: '12px', justifyContent: 'center', borderStyle: 'dashed' }}>
+                  <Plus size={14} />
+                  Inserir Material no Procedimento
                 </button>
-                <button onClick={handleSaveBOM} className={styles.primaryBtn}>
-                  Salvar Ficha Técnica
-                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'hsl(var(--bg-app))', padding: '16px', borderRadius: '12px', marginTop: '24px', border: '1px solid hsl(var(--border-color))' }}>
+                  <span style={{ fontWeight: 600, fontSize: '14px' }}>Custo Total de Insumos (BOM)</span>
+                  <strong style={{ fontSize: '18px', color: 'hsl(var(--primary))' }}>
+                    R$ {calculatedCustoMaterialGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </strong>
+                </div>
               </div>
+
+              {/* Coluna Direita: Calculadora */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div className={styles.contentCard}>
+                  <h3 className={styles.sectionTitle} style={{ borderBottom: '1px solid hsl(var(--border-color))', paddingBottom: '12px', marginBottom: '8px' }}>
+                    Variáveis e Rateios
+                  </h3>
+                  
+                  <div className={styles.form} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className={styles.formGroup}>
+                      <label>Mat. Especial Avulso (R$)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={custoMaterialEspecial}
+                        onChange={(e) => setCustoMaterialEspecial(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Serviço Laboratório (R$)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={custoTerceirosLaboratorio}
+                        onChange={(e) => setCustoTerceirosLaboratorio(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Tempo de Cadeira (Minutos)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={tempoConsultaMinutos}
+                        onChange={(e) => setTempoConsultaMinutos(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Total de Sessões/Consultas</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={numeroSessoesTotal}
+                        onChange={(e) => setNumeroSessoesTotal(Math.max(1, parseFloat(e.target.value) || 1))}
+                      />
+                    </div>
+
+                    <div style={{ gridColumn: 'span 2', height: '1px', background: 'hsl(var(--border-color))', margin: '8px 0' }} />
+
+                    <div className={styles.formGroup}>
+                      <label>Comissão Profissional (%)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={comissaoProfissionalPct}
+                        onChange={(e) => setComissaoProfissionalPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Taxa de Cartão (%)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={taxaCartaoPct}
+                        onChange={(e) => setTaxaCartaoPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Impostos (%)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={impostosPct}
+                        onChange={(e) => setImpostosPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Margem Desejada (%)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={margemLucroDesejadaPct}
+                        onChange={(e) => setMargemLucroDesejadaPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                    <div className={styles.formGroup} style={{ gridColumn: 'span 2' }}>
+                      <label>Outras Deduções (%)</label>
+                      <input 
+                        type="number" 
+                        className={styles.input}
+                        value={outrasDeducoesPct}
+                        onChange={(e) => setOutrasDeducoesPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dashboard de Resultados Ao Vivo */}
+                <div className={styles.contentCard} style={{ background: 'hsl(var(--bg-app))', border: '1px solid hsl(var(--border-color))' }}>
+                  <h3 className={styles.sectionTitle} style={{ fontSize: '15px' }}>Resultados do Cálculo (Markup Divisor)</h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '12px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'hsl(var(--text-muted))' }}>Custo por Sessão (Tempo Cadeira)</span>
+                      <span>R$ {custoPorConsultaTempo.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'hsl(var(--text-muted))' }}>Custo Fixo do Procedimento</span>
+                      <span>R$ {custoFixoProcedimento.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
+                      <span style={{ color: 'hsl(var(--text-main))' }}>Custo Total do Procedimento</span>
+                      <span>R$ {custoTotalProcedimento.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'hsl(var(--text-muted))' }}>Markup Divisor</span>
+                      <span>{markupDivisor ? markupDivisor.toFixed(4) : 'Inválido'}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ height: '1px', background: 'hsl(var(--border-color))', margin: '8px 0' }} />
+
+                  {totalDeducoesPct >= 100 ? (
+                    <div className={styles.alertBox} style={{ background: 'hsl(var(--danger-light))', color: 'hsl(var(--danger))', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                      <ShieldAlert size={20} />
+                      <div>
+                        <strong>Markup Indeterminado!</strong>
+                        <p>A soma das deduções atingiu {totalDeducoesPct}%. Ajuste as porcentagens para que a soma seja inferior a 100%.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, hsl(var(--success-light)) 0%, rgba(16,185,129,0.02) 100%)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)' }}>
+                      <div>
+                        <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>Valor Sugerido de Venda</span>
+                        <h3 style={{ fontSize: '22px', fontWeight: 800, color: 'hsl(var(--success))' }}>
+                          R$ {valorSugeridoCobranca.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                      </div>
+                      {isAdmin && (
+                        <button 
+                          onClick={() => setPrecoPraticado(Number(valorSugeridoCobranca.toFixed(2)))} 
+                          className={styles.secondaryBtn}
+                          style={{ padding: '6px 12px', fontSize: '12px' }}
+                        >
+                          Usar Sugerido
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '16px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600 }}>Preço Praticado na Clínica (R$)</label>
+                    <input 
+                      type="number" 
+                      className={styles.input}
+                      style={{ fontSize: '16px', fontWeight: 700, borderColor: 'hsl(var(--primary))' }}
+                      value={precoPraticado}
+                      onChange={(e) => setPrecoPraticado(Math.max(0, parseFloat(e.target.value) || 0))}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+
+                  {isAdmin && (
+                    <button onClick={handleSavePrecificacao} className={styles.primaryBtn} style={{ marginTop: '16px', justifyContent: 'center' }}>
+                      <Save size={16} />
+                      Salvar Precificação & Ficha
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.contentCard} style={{ textAlign: 'center', padding: '40px', color: 'hsl(var(--text-muted))' }}>
+              <Info size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
+              Selecione um procedimento acima para editar e calcular margens.
             </div>
           )}
         </div>
       )}
 
       {/* =========================================================================
-          ABA 4: CUSTOS FIXOS (RESTRITO ADMIN)
+          ABA 5: DASHBOARD DE RENTABILIDADE
           ========================================================================= */}
-      {activeTab === 'custos' && (
-        !isAdmin ? (
-          <div className={styles.contentCard}>
-            <div className={styles.restrictedArea}>
-              <Lock size={48} style={{ color: 'hsl(var(--danger))' }} />
-              <h3 className={styles.restrictedTitle}>Acesso Restrito</h3>
-              <p className={styles.restrictedText}>A visualização e cadastro de custos fixos e folha de pagamento são permitidos apenas para Administradores.</p>
+      {activeTab === 'rentabilidade' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryCard}>
+              <div className={styles.cardTitle}><TrendingUp size={16} style={{ color: 'hsl(var(--success))' }} /> Mais Rentável</div>
+              <div className={styles.cardValue} style={{ fontSize: '16px', fontWeight: 700 }}>
+                {rentabilidadeData.length > 0 ? rentabilidadeData[0].procedure_name : '-'}
+              </div>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--success))', fontWeight: 600 }}>
+                {rentabilidadeData.length > 0 ? `${rentabilidadeData[0].margem_realizada_pct}% de margem` : ''}
+              </span>
+            </div>
+            <div className={styles.summaryCard}>
+              <div className={styles.cardTitle}><TrendingDown size={16} style={{ color: 'hsl(var(--danger))' }} /> Deficitários (Margem Negativa)</div>
+              <div className={styles.cardValue} style={{ color: 'hsl(var(--danger))' }}>
+                {rentabilidadeData.filter(r => r.margem_realizada_valor < 0).length}
+              </div>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))' }}>Procedimentos operando no prejuízo</span>
             </div>
           </div>
-        ) : (
+
           <div className={styles.contentCard}>
             <div className={styles.sectionHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <h2 className={styles.sectionTitle}>Despesas & Custos Recorrentes</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', color: 'hsl(var(--text-muted))' }}>Competência:</span>
-                  <input 
-                    type="text" 
-                    placeholder="MM/YYYY" 
-                    className={styles.input}
-                    style={{ width: '100px', padding: '4px 8px' }}
-                    value={competence}
-                    onChange={(e) => setCompetence(e.target.value)}
-                  />
-                </div>
-              </div>
-              <button onClick={() => setIsNewCustoOpen(true)} className={styles.primaryBtn}>
-                <Plus size={14} />
-                <span>Lançar Custo Fixo</span>
+              <h2 className={styles.sectionTitle}>Ranking de Lucratividade dos Procedimentos</h2>
+              <button onClick={window.print} className={styles.secondaryBtn}>
+                Imprimir Demonstrativo
               </button>
-            </div>
-
-            <div className={styles.tableWrapper}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Nome da Despesa</th>
-                    <th>Tipo</th>
-                    <th>Competência</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {custosFixos.length > 0 ? (
-                    custosFixos.map(cf => (
-                      <tr key={cf.id}>
-                        <td style={{ fontWeight: '600' }}>{cf.nome}</td>
-                        <td>{cf.tipo}</td>
-                        <td>{cf.competencia}</td>
-                        <td style={{ fontWeight: '700', color: 'hsl(var(--danger))' }}>
-                          R$ {Number(cf.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px' }}>Nenhum custo fixo registrado para esta competência.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      )}
-
-      {/* =========================================================================
-          ABA 5: RELATÓRIO DE CUSTOS E MARGENS (RESTRITO ADMIN)
-          ========================================================================= */}
-      {activeTab === 'margens' && (
-        !isAdmin ? (
-          <div className={styles.contentCard}>
-            <div className={styles.restrictedArea}>
-              <Lock size={48} style={{ color: 'hsl(var(--danger))' }} />
-              <h3 className={styles.restrictedTitle}>Acesso Restrito</h3>
-              <p className={styles.restrictedText}>Relatórios consolidados de custos, rateios e margens por procedimento só podem ser visualizados por Administradores.</p>
-            </div>
-          </div>
-        ) : (
-          <div className={styles.contentCard}>
-            <div className={styles.sectionHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <h2 className={styles.sectionTitle}>Demonstrativo de Rentabilidade por Procedimento</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', color: 'hsl(var(--text-muted))' }}>Competência:</span>
-                  <input 
-                    type="text" 
-                    placeholder="MM/YYYY" 
-                    className={styles.input}
-                    style={{ width: '100px', padding: '4px 8px' }}
-                    value={competence}
-                    onChange={(e) => setCompetence(e.target.value)}
-                  />
-                </div>
-              </div>
-              <button onClick={() => window.print()} className={styles.secondaryBtn}>
-                <span>Imprimir / Exportar PDF</span>
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', background: 'hsl(var(--bg-app))', padding: '12px', borderRadius: '8px', fontSize: '13px', color: 'hsl(var(--text-muted))', alignItems: 'center' }}>
-              <Info size={16} />
-              <span><strong>Método de Rateio Simplificado:</strong> O custo fixo do mês (folha de pagamento, aluguel, energia) é somado e dividido pelo total de procedimentos confirmados no mesmo mês. Deixado preparado na V1 para suportar futuros rateios por tempo de cadeira.</span>
             </div>
 
             <div className={styles.tableWrapper}>
@@ -809,100 +1559,79 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                 <thead>
                   <tr>
                     <th>Procedimento</th>
-                    <th>Valor Cobrado</th>
-                    <th>Custo Material (BOM)</th>
-                    <th>Custo Fixo Rateado</th>
+                    <th>Especialidade</th>
                     <th>Custo Total</th>
-                    <th>Lucro Sugerido</th>
+                    <th>Preço Praticado</th>
+                    <th>Margem (R$)</th>
                     <th>Margem (%)</th>
+                    <th>Desempenho</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.length > 0 ? (
-                    reportData.map(row => {
-                      const lucro = row.valor_cobrado - row.custo_total;
+                  {rentabilidadeData.length > 0 ? (
+                    rentabilidadeData.map(r => {
+                      const isNeg = r.margem_realizada_valor < 0;
+                      const isLow = r.margem_realizada_pct < 20 && !isNeg;
+
                       return (
-                        <tr key={row.procedimento_id}>
-                          <td style={{ fontWeight: '600' }}>{row.procedimento_nome}</td>
-                          <td style={{ fontWeight: '500' }}>
-                            R$ {Number(row.valor_cobrado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td>R$ {Number(row.custo_material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                          <td>R$ {Number(row.custo_fixo_rateado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                          <td style={{ fontWeight: '600' }}>
-                            R$ {Number(row.custo_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ fontWeight: '600', color: lucro >= 0 ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
-                            R$ {lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <tr key={r.procedure_id} style={{ borderLeft: isNeg ? '4px solid hsl(var(--danger))' : 'none' }}>
+                          <td style={{ fontWeight: 600 }}>{r.procedure_name}</td>
+                          <td>{r.categoria_especialidade || 'Outros'}</td>
+                          <td>R$ {Number(r.custo_total).toFixed(2)}</td>
+                          <td style={{ fontWeight: 500 }}>R$ {Number(r.preco_praticado).toFixed(2)}</td>
+                          <td style={{ fontWeight: 700, color: isNeg ? 'hsl(var(--danger))' : 'hsl(var(--success))' }}>
+                            R$ {Number(r.margem_realizada_valor).toFixed(2)}
                           </td>
                           <td>
-                            <span className={`${styles.profitBadge} ${row.margem_percentual >= 30 ? styles.profitPositive : styles.profitNegative}`}>
-                              {row.margem_percentual}%
+                            <span className={`${styles.profitBadge} ${isNeg ? styles.profitNegative : isLow ? styles.badgeWarning : styles.profitPositive}`}>
+                              {r.margem_realizada_pct.toFixed(1)}%
                             </span>
+                          </td>
+                          <td>
+                            {isNeg ? (
+                              <span className={`${styles.badge} ${styles.badgeLowStock}`}>Prejuízo</span>
+                            ) : isLow ? (
+                              <span className={`${styles.badge} ${styles.badgeWarning}`}>Alerta</span>
+                            ) : (
+                              <span className={`${styles.badge} ${styles.badgeNormal}`}>Excelente</span>
+                            )}
                           </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum dado financeiro para demonstrar nesta competência.</td>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum procedimento precificado na unidade.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-        )
+        </div>
       )}
 
       {/* =========================================================================
-          DRAWER: NOVO INSUMO
+          DRAWER: CADASTRAR/EDITAR INSUMO
           ========================================================================= */}
-      <div className={`${styles.overlay} ${isNewInsumoOpen ? styles.overlayActive : ''}`} onClick={() => setIsNewInsumoOpen(false)} />
-      <div className={`${styles.drawer} ${isNewInsumoOpen ? styles.drawerActive : ''}`}>
+      <div className={`${styles.overlay} ${(isNewInsumoOpen || isEditInsumoOpen) ? styles.overlayActive : ''}`} onClick={() => { setIsNewInsumoOpen(false); setIsEditInsumoOpen(false); }} />
+      <div className={`${styles.drawer} ${(isNewInsumoOpen || isEditInsumoOpen) ? styles.drawerActive : ''}`}>
         <div className={styles.drawerHeader}>
-          <h3 className={styles.drawerTitle}>Cadastrar Novo Insumo</h3>
-          <button className={styles.closeBtn} onClick={() => setIsNewInsumoOpen(false)}>
-            <RefreshCw size={20} />
+          <h3 className={styles.drawerTitle}>{isEditInsumoOpen ? 'Editar Material' : 'Cadastrar Novo Material'}</h3>
+          <button className={styles.closeBtn} onClick={() => { setIsNewInsumoOpen(false); setIsEditInsumoOpen(false); }}>
+            <X size={20} />
           </button>
         </div>
 
-        <form className={styles.form} onSubmit={handleAddInsumoSubmit}>
+        <form className={styles.form} onSubmit={isEditInsumoOpen ? handleEditInsumoSubmit : handleAddInsumoSubmit}>
           <div className={styles.formGroup}>
-            <label>Nome do Insumo</label>
+            <label>Nome do Insumo / Material</label>
             <input 
               type="text" 
               className={styles.input}
-              placeholder="Ex: Resina Composta Z350"
+              placeholder="Ex: Anestésico Mepivacaína 2%"
               value={formInsumo.nome}
               onChange={(e) => setFormInsumo({ ...formInsumo, nome: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Unidade de Medida</label>
-            <select 
-              className={styles.select}
-              value={formInsumo.unidade_medida}
-              onChange={(e) => setFormInsumo({ ...formInsumo, unidade_medida: e.target.value })}
-            >
-              <option value="unidade">Unidade</option>
-              <option value="ml">ml</option>
-              <option value="caixa">Caixa</option>
-              <option value="mg">mg</option>
-              <option value="grama">Grama</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Estoque Mínimo (Alerta)</label>
-            <input 
-              type="number" 
-              className={styles.input}
-              placeholder="Ex: 10"
-              value={formInsumo.estoque_minimo}
-              onChange={(e) => setFormInsumo({ ...formInsumo, estoque_minimo: e.target.value })}
               required
             />
           </div>
@@ -919,30 +1648,109 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
               <option value="Dentística">Dentística</option>
               <option value="Ortodontia">Ortodontia</option>
               <option value="Cirurgia">Cirurgia</option>
+              <option value="Materiais de Escritório">Materiais de Escritório</option>
+              <option value="Outros">Outros</option>
             </select>
           </div>
 
+          <div className={styles.formGroup}>
+            <label>Unidade de Medida (Estoque)</label>
+            <select 
+              className={styles.select}
+              value={formInsumo.unidade_medida}
+              onChange={(e) => setFormInsumo({ ...formInsumo, unidade_medida: e.target.value })}
+            >
+              <option value="unidade">unidade</option>
+              <option value="ml">ml</option>
+              <option value="grama">grama</option>
+              <option value="tubete">tubete</option>
+              <option value="caixa">caixa</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Qtd. por Embalagem Comprada</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 1 (caixa)"
+              value={formInsumo.quantidade_embalagem}
+              onChange={(e) => setFormInsumo({ ...formInsumo, quantidade_embalagem: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Rendimento em Unidades de Uso</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 50 (50 agulhas ou 50 aplicações)"
+              value={formInsumo.quantidade_rendimento}
+              onChange={(e) => setFormInsumo({ ...formInsumo, quantidade_rendimento: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Preço Pago por Embalagem (R$)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 120.00"
+              value={formInsumo.preco_embalagem_atual}
+              onChange={(e) => setFormInsumo({ ...formInsumo, preco_embalagem_atual: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Estoque Mínimo (Alerta)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 20"
+              value={formInsumo.estoque_minimo}
+              onChange={(e) => setFormInsumo({ ...formInsumo, estoque_minimo: e.target.value })}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <input 
+              type="checkbox" 
+              id="insumo_ativo"
+              checked={formInsumo.ativo}
+              onChange={(e) => setFormInsumo({ ...formInsumo, ativo: e.target.checked })}
+            />
+            <label htmlFor="insumo_ativo" style={{ fontSize: '13px', fontWeight: 500, userSelect: 'none' }}>Material Ativo no Catálogo</label>
+          </div>
+
           <button type="submit" className={styles.primaryBtn} style={{ marginTop: '12px', justifyContent: 'center' }}>
-            Salvar Insumo
+            {isEditInsumoOpen ? 'Salvar Alterações' : 'Gravar Material'}
           </button>
         </form>
       </div>
 
       {/* =========================================================================
-          DRAWER: REGISTRAR COMPRA (RESTRITO ADMIN)
+          DRAWER: REGISTRAR COMPRA
           ========================================================================= */}
       <div className={`${styles.overlay} ${isNewCompraOpen ? styles.overlayActive : ''}`} onClick={() => setIsNewCompraOpen(false)} />
       <div className={`${styles.drawer} ${isNewCompraOpen ? styles.drawerActive : ''}`}>
         <div className={styles.drawerHeader}>
-          <h3 className={styles.drawerTitle}>Registrar Compra de Insumo</h3>
+          <h3 className={styles.drawerTitle}>Registrar Entrada de Compra</h3>
           <button className={styles.closeBtn} onClick={() => setIsNewCompraOpen(false)}>
-            <RefreshCw size={20} />
+            <X size={20} />
           </button>
         </div>
 
         <form className={styles.form} onSubmit={handleAddCompraSubmit}>
           <div className={styles.formGroup}>
-            <label>Selecione o Insumo</label>
+            <label>Insumo Adquirido</label>
             <select 
               className={styles.select}
               value={formCompra.insumo_id}
@@ -950,7 +1758,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
               required
             >
               <option value="">Selecione...</option>
-              {insumos.map(i => (
+              {insumos.filter(i => i.ativo).map(i => (
                 <option key={i.id} value={i.id}>{i.nome}</option>
               ))}
             </select>
@@ -964,32 +1772,31 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
               placeholder="Ex: Dental Cremer"
               value={formCompra.fornecedor}
               onChange={(e) => setFormCompra({ ...formCompra, fornecedor: e.target.value })}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Quantidade de Embalagens</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 5"
+              value={formCompra.quantidade_comprada}
+              onChange={(e) => setFormCompra({ ...formCompra, quantidade_comprada: e.target.value })}
               required
             />
           </div>
 
           <div className={styles.formGroup}>
-            <label>Quantidade Comprada</label>
+            <label>Preço Pago por Embalagem (R$)</label>
             <input 
               type="number" 
               step="0.01"
               className={styles.input}
-              placeholder="Ex: 50"
-              value={formCompra.quantidade}
-              onChange={(e) => setFormCompra({ ...formCompra, quantidade: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Valor Total da Compra (R$)</label>
-            <input 
-              type="number" 
-              step="0.01"
-              className={styles.input}
-              placeholder="Ex: 120.00"
-              value={formCompra.valor_total}
-              onChange={(e) => setFormCompra({ ...formCompra, valor_total: e.target.value })}
+              placeholder="Ex: 45.00"
+              value={formCompra.preco_pago_embalagem}
+              onChange={(e) => setFormCompra({ ...formCompra, preco_pago_embalagem: e.target.value })}
               required
             />
           </div>
@@ -999,7 +1806,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
             <input 
               type="text" 
               className={styles.input}
-              placeholder="Ex: NF-23423"
+              placeholder="Ex: NF-4923"
               value={formCompra.nota_fiscal}
               onChange={(e) => setFormCompra({ ...formCompra, nota_fiscal: e.target.value })}
             />
@@ -1012,73 +1819,133 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
       </div>
 
       {/* =========================================================================
-          DRAWER: NOVO CUSTO FIXO (RESTRITO ADMIN)
+          DRAWER: NOVO CUSTO FIXO
           ========================================================================= */}
       <div className={`${styles.overlay} ${isNewCustoOpen ? styles.overlayActive : ''}`} onClick={() => setIsNewCustoOpen(false)} />
       <div className={`${styles.drawer} ${isNewCustoOpen ? styles.drawerActive : ''}`}>
         <div className={styles.drawerHeader}>
-          <h3 className={styles.drawerTitle}>Lançar Despesa Fixa</h3>
+          <h3 className={styles.drawerTitle}>Adicionar Custo Fixo</h3>
           <button className={styles.closeBtn} onClick={() => setIsNewCustoOpen(false)}>
-            <RefreshCw size={20} />
+            <X size={20} />
           </button>
         </div>
 
         <form className={styles.form} onSubmit={handleAddCustoSubmit}>
           <div className={styles.formGroup}>
-            <label>Nome do Custo / Serviço</label>
+            <label>Descrição do Custo</label>
             <input 
               type="text" 
               className={styles.input}
-              placeholder="Ex: Aluguel da Sala"
-              value={formCusto.nome}
-              onChange={(e) => setFormCusto({ ...formCusto, nome: e.target.value })}
+              placeholder="Ex: Aluguel da Clínica, Pro Labore, Internet"
+              value={formCusto.nome_custo}
+              onChange={(e) => setFormCusto({ ...formCusto, nome_custo: e.target.value })}
               required
             />
           </div>
 
           <div className={styles.formGroup}>
-            <label>Tipo</label>
-            <select 
-              className={styles.select}
-              value={formCusto.tipo}
-              onChange={(e) => setFormCusto({ ...formCusto, tipo: e.target.value as any })}
-            >
-              <option value="fixo_mensal">Fixo Mensal</option>
-              <option value="variavel">Variável Operacional</option>
-              <option value="recorrente">Recorrente (Folha PG)</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Valor (R$)</label>
+            <label>Valor Mensal (R$)</label>
             <input 
               type="number" 
               step="0.01"
               className={styles.input}
-              placeholder="Ex: 1500.00"
-              value={formCusto.valor}
-              onChange={(e) => setFormCusto({ ...formCusto, valor: e.target.value })}
+              placeholder="Ex: 2500.00"
+              value={formCusto.valor_mensal}
+              onChange={(e) => setFormCusto({ ...formCusto, valor_mensal: e.target.value })}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <input 
+              type="checkbox" 
+              id="custo_ativo"
+              checked={formCusto.ativo}
+              onChange={(e) => setFormCusto({ ...formCusto, ativo: e.target.checked })}
+            />
+            <label htmlFor="custo_ativo" style={{ fontSize: '13px', fontWeight: 500, userSelect: 'none' }}>Custo Ativo no Rateio</label>
+          </div>
+
+          <button type="submit" className={styles.primaryBtn} style={{ marginTop: '12px', justifyContent: 'center' }}>
+            Gravar Lançamento
+          </button>
+        </form>
+      </div>
+
+      {/* =========================================================================
+          DRAWER: AJUSTE MANUAL DE ESTOQUE
+          ========================================================================= */}
+      <div className={`${styles.overlay} ${isAjusteManualOpen ? styles.overlayActive : ''}`} onClick={() => setIsAjusteManualOpen(false)} />
+      <div className={`${styles.drawer} ${isAjusteManualOpen ? styles.drawerActive : ''}`}>
+        <div className={styles.drawerHeader}>
+          <h3 className={styles.drawerTitle}>Ajustar Estoque Manualmente</h3>
+          <button className={styles.closeBtn} onClick={() => setIsAjusteManualOpen(false)}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form className={styles.form} onSubmit={handleAjusteManualSubmit}>
+          <div className={styles.formGroup}>
+            <label>Material para Ajuste</label>
+            <select 
+              className={styles.select}
+              value={formAjuste.insumo_id}
+              onChange={(e) => setFormAjuste({ ...formAjuste, insumo_id: e.target.value })}
+              required
+            >
+              <option value="">Selecione...</option>
+              {insumos.filter(i => i.ativo).map(i => (
+                <option key={i.id} value={i.id}>{i.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Tipo de Ajuste</label>
+            <select 
+              className={styles.select}
+              value={formAjuste.tipo}
+              onChange={(e) => setFormAjuste({ ...formAjuste, tipo: e.target.value })}
+              required
+            >
+              <option value="saida">Saída (Subtrair do estoque)</option>
+              <option value="entrada">Entrada (Adicionar ao estoque)</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Quantidade de Ajuste (Uso Real)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className={styles.input}
+              placeholder="Ex: 5"
+              value={formAjuste.quantidade}
+              onChange={(e) => setFormAjuste({ ...formAjuste, quantidade: e.target.value })}
               required
             />
           </div>
 
           <div className={styles.formGroup}>
-            <label>Competência (Mês/Ano)</label>
-            <input 
-              type="text" 
-              className={styles.input}
-              placeholder="Ex: 07/2026"
-              value={formCusto.competencia}
-              onChange={(e) => setFormCusto({ ...formCusto, competencia: e.target.value })}
+            <label>Motivo do Ajuste</label>
+            <select 
+              className={styles.select}
+              value={formAjuste.motivo}
+              onChange={(e) => setFormAjuste({ ...formAjuste, motivo: e.target.value })}
               required
-            />
+            >
+              <option value="perda">Perda / Desperdício / Vencimento</option>
+              <option value="ajuste_manual">Ajuste de Inventário / Contagem</option>
+              <option value="doacao">Doação / Empréstimo</option>
+            </select>
           </div>
 
           <button type="submit" className={styles.primaryBtn} style={{ marginTop: '12px', justifyContent: 'center' }}>
-            Confirmar Lançamento
+            Confirmar Ajuste
           </button>
         </form>
       </div>
+
     </div>
   );
 }

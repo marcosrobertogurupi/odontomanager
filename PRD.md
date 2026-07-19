@@ -1,51 +1,84 @@
-# Documento de Requisitos de Produto (PRD) - Análise e Melhorias para o Aplicativo Web "ControleODONTO"
+# Documento de Requisitos de Produto (PRD) - OdontoManager (Versão Atualizada)
 
-## 1. Introdução
-Este Documento de Requisitos de Produto (PRD) apresenta uma análise detalhada do aplicativo web "ControleODONTO", com foco em suas funcionalidades atuais e na identificação de oportunidades de melhoria. O objetivo é fornecer uma base para o desenvolvimento de uma versão aprimorada do aplicativo, visando otimizar a experiência do usuário e a eficiência operacional.
+## 1. Visão Geral do Produto
+O **OdontoManager** (evolução do ControleODONTO) é um Software como Serviço (SaaS) completo em nuvem voltado para a gestão de clínicas e consultórios odontológicos. O produto oferece uma interface moderna, premium, responsiva e focada em isolamento de dados multilocatário (Multi-Tenancy), facilitando a rotina de agendamentos, o controle financeiro, a gestão de estoque, o fluxo físico de pacientes na clínica e a comunicação assistida por Inteligência Artificial.
 
-## 2. Análise do Sistema Atual
-O aplicativo "ControleODONTO" é uma ferramenta de gestão para clínicas odontológicas, oferecendo diversas funcionalidades para o gerenciamento de pacientes, agendamentos e aspectos administrativos. A interface principal é composta por um dashboard, uma barra superior com atalhos e um menu lateral de navegação.
+---
 
-### 2.1. Visão Geral da Interface
-O **Dashboard Principal** serve como a tela inicial, exibindo um resumo de acessos, o status do cadastro do usuário, informações sobre e-mail de confirmação e comunicados importantes. A **Barra Superior** inclui uma funcionalidade de pesquisa de pacientes, a exibição da nota de satisfação dos pacientes (10,0), e atalhos rápidos para comandos de voz (Zai), comunicação interna, lembretes e alertas. O perfil do usuário, acessível por esta barra, permite gerenciar o cadastro, agenda pessoal, suporte, log de atualizações e a troca de unidade. O **Menu Lateral** organiza as principais seções do aplicativo através de ícones, que incluem Dashboard, Fluxo na Clínica, Agendamentos, Conversas ZaiONe, Controle de Retornos, Controle de Convênios, Movimentações, Procedimentos, Consultar Remunerações, Gestão da Excelência e Administração.
+## 2. Arquitetura e Stack Tecnológica
 
-### 2.2. Funcionalidades Principais
+O projeto é estruturado como uma aplicação moderna desacoplada:
 
-#### Agendamentos
-A seção de Agendamentos é central para o aplicativo, permitindo a visualização de compromissos em diferentes formatos: Timeline, Calendário e Retornos. Há botões dedicados para a criação de "Novo Agendamento" e para "Gerar link público" de agendamento, facilitando a interação com pacientes. A funcionalidade de agendamento também oferece filtros por profissional, consultório e fila de espera, além de um mapa de disponibilidade diário/semanal. Ao clicar em horários específicos, um modal de "Agendamentos do Intervalo" é exibido, permitindo a gestão detalhada dos horários.
+1. **Frontend (React + Vite + TypeScript)**:
+   - Interface construída com CSS nativo e componentes estilizados de forma premium (paleta HSL, cantos arredondados, efeitos de hover e micro-animações).
+   - Integração direta com o Supabase via cliente JS autenticado.
+   - Gerenciamento de contexto do Tenant ativo.
 
-#### Comunicação
-O aplicativo integra um sistema de comunicação interna, o ZaiONe, que facilita a troca de mensagens. Além disso, há suporte para envio de SMS, mensagens via WhatsApp e a realização de teleconsultas, indicando um esforço para manter a comunicação fluida com os pacientes.
+2. **Backend e Persistência (Supabase + PostgreSQL)**:
+   - Banco de dados relacional PostgreSQL hospedado no Supabase.
+   - **Isolamento Multilocatário (Multi-Tenancy)** rigoroso habilitado via Row Level Security (RLS) em todas as tabelas transacionais, baseado no vínculo de usuários e tenants na tabela `users_tenants`.
+   - **Supabase Storage**: Bucket público `clinic-logos` configurado para armazenamento dos logotipos personalizados das clínicas.
 
-#### Gestão
-As funcionalidades de gestão abrangem diversas áreas, incluindo um Painel de Gestão (acessível pelo atalho 201), Prontuários (atalho 001), Mala Direta, Gestão de Negócios e Gestão de Contratos. Essas ferramentas são essenciais para o controle administrativo e financeiro da clínica.
+3. **Funções Serverless (Supabase Edge Functions)**:
+   - **`zai-chat`**: Assistente de IA integrado com a API do Google Gemini para interpretar linguagem natural, buscar dados da clínica no banco de dados e disparar mensagens automáticas ou manuais.
+   - **`send-message`**: Gateway integrado para o disparo de mensagens via SMS (Twilio) ou WhatsApp (UAZAPI).
 
-## 3. Pontos de Melhoria (UX/UI)
-Durante a análise, foram identificados alguns pontos que podem ser aprimorados para modernizar o aplicativo e melhorar a experiência do usuário:
+---
 
-*   **Interface Datada:** O design visual do aplicativo apresenta características de sistemas legados, com ícones pequenos e uma densidade de informações que pode sobrecarregar o usuário. Uma atualização estética é fundamental para alinhar o aplicativo às expectativas modernas de design.
-*   **Navegação Complexa:** O menu lateral, composto exclusivamente por ícones, exige que o usuário passe o mouse sobre cada um para identificar sua função. A ausência de rótulos de texto visíveis dificulta a navegação intuitiva, especialmente para novos usuários.
-*   **Carregamento de Telas:** Observou-se que algumas telas demoram a carregar completamente, o que pode impactar negativamente a produtividade e a satisfação do usuário.
-*   **Excesso de Modais:** A utilização frequente e sobreposta de modais pode interromper o fluxo de trabalho do usuário e gerar confusão, especialmente em tarefas que exigem múltiplas interações.
-*   **Responsividade Mobile:** A interface não parece ser totalmente responsiva ou otimizada para dispositivos móveis, o que limita a usabilidade do aplicativo em smartphones e tablets.
+## 3. Funcionalidades Detalhadas
 
-## 4. Recomendações de Melhoria
-Com base nos pontos identificados, as seguintes recomendações são propostas para o desenvolvimento de uma versão aprimorada do "ControleODONTO":
+### 3.1. Arquitetura SaaS / Multi-Tenancy
+- **Isolamento de Dados**: Cada clínica (Tenant) possui seus próprios dados isolados. Usuários do sistema são associados aos seus respectivos Tenants na tabela `users_tenants`.
+- **Múltiplas Unidades**: O sistema suporta múltiplas filiais/unidades físicas para o mesmo Tenant. O usuário pode alternar facilmente de unidade na barra superior.
+- **Branding Customizado**: Suporte ao upload do logotipo da clínica. O arquivo de imagem é armazenado em um bucket do Supabase Storage e associado ao tenant (coluna `logo_url` na tabela `tenants`), sendo exibido dinamicamente na barra lateral.
 
-### 4.1. Design e Usabilidade
-*   **Modernização da Interface:** Implementar um design mais limpo e moderno, com espaçamento adequado, tipografia legível e uma paleta de cores atualizada. Isso inclui a revisão dos ícones para que sejam mais intuitivos e visualmente atraentes.
-*   **Navegação Aprimorada:** Adicionar rótulos de texto ao lado dos ícones no menu lateral, com a opção de recolher o menu para exibir apenas os ícones, caso o usuário prefira. Isso tornaria a navegação mais clara e acessível.
-*   **Hierarquia Visual:** Reorganizar a apresentação das informações nas telas para reduzir a densidade e destacar os elementos mais importantes, utilizando princípios de design que guiam o olhar do usuário de forma eficiente.
+### 3.2. Agenda Clínica & Agendamentos
+- **Gestão de Consultas**: Agendamento de consultas com associação de paciente, profissional, horário de início/fim, sala e observações.
+- **Filtros e Visualização**: Visualização diária filtrada por unidade selecionada.
+- **Fila de Espera & Check-in**: A partir da própria agenda, a recepção pode realizar o **Check-in** do paciente. Isso cria ou atualiza automaticamente o registro no painel de fluxo da clínica.
 
-### 4.2. Performance
-*   **Otimização de Carregamento:** Investigar e otimizar o desempenho de carregamento das telas, especialmente aquelas com maior volume de dados ou funcionalidades complexas. Isso pode envolver a otimização de consultas de banco de dados, carregamento assíncrono de componentes e o uso de técnicas de cache.
+### 3.3. Painel de Fluxo na Clínica (Recepção)
+- **Funil de Espera**: Acompanhamento visual dos pacientes nas seguintes etapas:
+  1. **Checked In**: Paciente fez check-in na recepção.
+  2. **Waiting Room**: Paciente aguardando na sala de espera.
+  3. **In Consultation**: Paciente em atendimento com o dentista.
+  4. **Checked Out**: Consulta finalizada e liberação do paciente.
+- **Registro de Atividades**: Histórico em tempo real exibido no dashboard das movimentações recentes do dia.
 
-### 4.3. Experiência do Usuário
-*   **Revisão de Modais:** Avaliar a necessidade de cada modal e, quando possível, substituí-los por componentes de interface mais integrados ou fluxos de tela que minimizem interrupções. Para modais essenciais, garantir que sejam claros, concisos e ofereçam uma experiência de usuário fluida.
-*   **Desenvolvimento Responsivo:** Implementar um design responsivo completo, garantindo que o aplicativo seja totalmente funcional e visualmente agradável em uma variedade de dispositivos e tamanhos de tela, incluindo desktops, tablets e smartphones.
+### 3.4. Dashboard & Analytics Real
+- **Métricas Rápidas**: Exibição da quantidade de agendados para hoje, pacientes na sala de espera, satisfação média e faturamento do dia.
+- **Balanço Financeiro Semanal**: Gráfico de colunas de Entradas (Receitas) vs. Saídas (Despesas) baseado em lançamentos reais na tabela `transactions`.
+- **Avisos e Comunicados Dinâmicos**: Quadro de notícias integrado ao banco de dados (tabela `announcements`), permitindo configurar avisos urgentes, novidades ou comunicados gerais por clínica ou por unidade.
 
-## 5. Conclusão
-As melhorias propostas neste PRD visam transformar o "ControleODONTO" em um aplicativo mais moderno, intuitivo e eficiente. Ao focar na modernização da interface, na otimização da navegação, na melhoria da performance e na adaptação para dispositivos móveis, o novo aplicativo poderá oferecer uma experiência superior aos usuários, aumentando a satisfação e a produtividade nas clínicas odontológicas.
+### 3.5. Integrações & IA (ZaiONe)
+- **Assistente Zai**: Inteligência Artificial para interagir com o profissional da clínica. Permite consultas em linguagem natural ("quais os pacientes de hoje?", "agende para amanhã").
+- **Gateway UAZAPI (WhatsApp)**: Configuração de servidor customizado e token de API por Tenant para disparo de mensagens de confirmação, lembretes de consultas e links de teleconsultas diretamente no WhatsApp do paciente.
+- **Twilio (SMS)**: Canal secundário para comunicação direta por SMS.
+- **Teleconsultas**: Geração automática de salas de conferência únicas via Jitsi Meet com envio imediato do link de convite por WhatsApp.
 
-## 6. Referências
-[1] Informações obtidas através da exploração do aplicativo web "ControleODONTO" (https://co.aplicativo.net/).
+---
+
+## 4. Estrutura do Banco de Dados (Schema)
+
+As tabelas do banco de dados incluem:
+
+- **`tenants`**: Armazena as clínicas cadastradas, informações cadastrais (e-mail, endereço, telefone) e URL do logotipo customizado (`logo_url`).
+- **`units`**: As unidades físicas ou filiais de cada clínica.
+- **`profiles`**: Perfis dos profissionais e funcionários da clínica vinculados ao Auth do Supabase.
+- **`users_tenants`**: Tabela de associação N:N entre perfis de usuários e seus respectivos Tenants autorizados.
+- **`patients`**: Dados cadastrais dos pacientes da clínica.
+- **`procedures`**: Catálogo de procedimentos odontológicos e seus preços padrão.
+- **`appointments`**: Registro de consultas agendadas.
+- **`clinic_flow`**: Funil de acompanhamento físico do paciente no dia da consulta (`checked_in_at`, `consultation_started_at`, `consultation_ended_at`, `status`).
+- **`transactions`**: Lançamentos financeiros de entrada (receita) ou saída (despesa).
+- **`announcements`**: Quadro de comunicados dinâmicos filtrados por tenant e/ou unidade.
+- **`tenant_integrations`**: Credenciais de integração (UAZAPI, Twilio) de cada clínica.
+- **`zai_chats`** & **`zai_messages`**: Registro de conversas e mensagens com a IA ou chats internos.
+- **`insumos`**, **`estoque_unidade`**, **`compras_estoque`**, **`movimentacoes_estoque`**, **`custos_fixos`**: Gestão completa de estoque e controle de custos.
+
+---
+
+## 5. Próximos Passos e Roadmap
+- [ ] Implementar a edição e criação de avisos diretamente pelo painel administrativo da clínica no frontend.
+- [ ] Implementar o envio automático do aviso no WhatsApp (via UAZAPI) quando o paciente fizer o check-in na recepção.
+- [ ] Desenvolver relatórios consolidados de faturamento mensal e comissão de profissionais baseados nos procedimentos executados.

@@ -99,10 +99,13 @@ export default function ClinicFlow() {
           if (rpcError) throw rpcError;
         }
 
-        // Atualiza status do agendamento para confirmado
+        // Atualiza status do agendamento para confirmado e salva o procedimento realizado
         const { error: appError } = await supabase
           .from('appointments')
-          .update({ status: 'confirmed' })
+          .update({ 
+            status: 'confirmed',
+            procedure_id: procedure_id || null
+          })
           .eq('id', appointmentId)
           .eq('tenant_id', activeTenant.id);
         if (appError) throw appError;

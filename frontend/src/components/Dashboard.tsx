@@ -27,6 +27,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
   });
   const [financials, setFinancials] = useState({ income: 0, expense: 0 });
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -115,6 +116,17 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
           return { id: flowItem.id, text, time, color };
         });
         setRecentActivities(activities.slice(0, 5));
+
+        // 4. Carregar comunicados/avisos reais
+        const { data: noticesData, error: noticesError } = await supabase
+          .from('announcements')
+          .select('*')
+          .eq('tenant_id', activeTenant.id)
+          .or(`unit_id.is.null,unit_id.eq.${selectedUnit}`)
+          .order('created_at', { ascending: false });
+
+        if (noticesError) throw noticesError;
+        setAnnouncements(noticesData || []);
 
       } catch (err) {
         console.error('Erro ao carregar dados do dashboard:', err);
@@ -267,32 +279,43 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
               Avisos e Comunicados
             </h2>
             <div className={styles.noticeBoard}>
-              <div className={styles.noticeItem}>
-                <div className={styles.noticeHeader}>
-                  <span className={styles.noticeTag} style={{ backgroundColor: 'hsl(var(--danger-light))', color: 'hsl(var(--danger))' }}>Urgente</span>
-                  <span className={styles.activityTime}>Hoje</span>
-                </div>
-                <h4 className={styles.noticeTitle}>Manutenção de Equipamento</h4>
-                <p className={styles.noticeBody}>O autoclave do Consultório B passará por calibração obrigatória às 14h.</p>
-              </div>
+              {announcements.length > 0 ? (
+                announcements.map((notice) => {
+                  let tagStyle = { backgroundColor: 'hsl(var(--success-light))', color: 'hsl(var(--success))' };
+                  if (notice.tag_type === 'urgent') {
+                    tagStyle = { backgroundColor: 'hsl(var(--danger-light))', color: 'hsl(var(--danger))' };
+                  } else if (notice.tag_type === 'new') {
+                    tagStyle = { backgroundColor: 'hsl(var(--primary-light))', color: 'hsl(var(--primary))' };
+                  }
 
-              <div className={styles.noticeItem}>
-                <div className={styles.noticeHeader}>
-                  <span className={styles.noticeTag} style={{ backgroundColor: 'hsl(var(--primary-light))', color: 'hsl(var(--primary))' }}>Novidade</span>
-                  <span className={styles.activityTime}>Ontem</span>
-                </div>
-                <h4 className={styles.noticeTitle}>Nova Versão ZaiONe</h4>
-                <p className={styles.noticeBody}>O assistente Zai agora avisa via WhatsApp quando o paciente chega na clínica!</p>
-              </div>
+                  const createdDate = new Date(notice.created_at);
+                  const today = new Date();
+                  const yesterday = new Date();
+                  yesterday.setDate(today.getDate() - 1);
 
-              <div className={styles.noticeItem}>
-                <div className={styles.noticeHeader}>
-                  <span className={styles.noticeTag} style={{ backgroundColor: 'hsl(var(--success-light))', color: 'hsl(var(--success))' }}>Geral</span>
-                  <span className={styles.activityTime}>15 Jul</span>
-                </div>
-                <h4 className={styles.noticeTitle}>Férias Dra. Beatriz</h4>
-                <p className={styles.noticeBody}>Lembramos que a Dra. Beatriz estará ausente no período de 01 a 10 de Agosto.</p>
-              </div>
+                  let timeLabel = '';
+                  if (createdDate.toDateString() === today.toDateString()) {
+                    timeLabel = 'Hoje';
+                  } else if (createdDate.toDateString() === yesterday.toDateString()) {
+                    timeLabel = 'Ontem';
+                  } else {
+                    timeLabel = createdDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                  }
+
+                  return (
+                    <div key={notice.id} className={styles.noticeItem}>
+                      <div className={styles.noticeHeader}>
+                        <span className={styles.noticeTag} style={tagStyle}>{notice.tag}</span>
+                        <span className={styles.activityTime}>{timeLabel}</span>
+                      </div>
+                      <h4 className={styles.noticeTitle}>{notice.title}</h4>
+                      <p className={styles.noticeBody}>{notice.body}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className={styles.subtitle} style={{ textAlign: 'center', padding: '20px' }}>Nenhum aviso ou comunicado registrado.</p>
+              )}
             </div>
           </div>
         </div>
