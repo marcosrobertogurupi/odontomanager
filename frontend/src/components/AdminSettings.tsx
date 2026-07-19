@@ -11,7 +11,10 @@ import {
   ToggleRight,
   Image,
   Upload,
-  Trash2
+  Trash2,
+  Sparkles,
+  Smartphone,
+  Loader
 } from 'lucide-react';
 import styles from './AdminSettings.module.css';
 import { useTenant } from '../contexts/TenantContext';
@@ -50,6 +53,18 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [tenants, setTenants] = useState<TenantModel[]>([]);
   const [uploading, setUploading] = useState(false);
+
+  // Configurações de Integração
+  const [uazapiInstanceId, setUazapiInstanceId] = useState('');
+  const [uazapiToken, setUazapiToken] = useState('');
+  const [whatsappConectado, setWhatsappConectado] = useState(false);
+  const [twilioAccountSid, setTwilioAccountSid] = useState('');
+  const [twilioAuthToken, setTwilioAuthToken] = useState('');
+  const [twilioFromNumber, setTwilioFromNumber] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  
+  const [savingIntegrations, setSavingIntegrations] = useState(false);
   
   // Novo Procedimento
   const [formName, setFormName] = useState('');
@@ -228,10 +243,78 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
     }
   };
 
+  const fetchIntegrations = async () => {
+    if (!activeTenant) return;
+    try {
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setUazapiInstanceId(data.uazapi_instance_id || '');
+        setUazapiToken(data.uazapi_token || '');
+        setWhatsappConectado(data.whatsapp_conectado || false);
+        setTwilioAccountSid(data.twilio_account_sid || '');
+        setTwilioAuthToken(data.twilio_auth_token || '');
+        setTwilioFromNumber(data.twilio_from_number || '');
+        setGeminiApiKey(data.gemini_api_key || '');
+        setGeminiModel(data.gemini_model || 'gemini-1.5-flash');
+      } else {
+        setUazapiInstanceId('');
+        setUazapiToken('');
+        setWhatsappConectado(false);
+        setTwilioAccountSid('');
+        setTwilioAuthToken('');
+        setTwilioFromNumber('');
+        setGeminiApiKey('');
+        setGeminiModel('gemini-1.5-flash');
+      }
+    } catch (err) {
+      console.error('Erro ao buscar configurações de integração:', err);
+    }
+  };
+
+  const handleSaveIntegrations = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant) return;
+
+    try {
+      setSavingIntegrations(true);
+
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .upsert({
+          tenant_id: activeTenant.id,
+          uazapi_instance_id: uazapiInstanceId || null,
+          uazapi_token: uazapiToken || null,
+          whatsapp_conectado: whatsappConectado,
+          twilio_account_sid: twilioAccountSid || null,
+          twilio_auth_token: twilioAuthToken || null,
+          twilio_from_number: twilioFromNumber || null,
+          gemini_api_key: geminiApiKey || null,
+          gemini_model: geminiModel || 'gemini-1.5-flash'
+        }, { onConflict: 'tenant_id' });
+
+      if (error) throw error;
+
+      alert('Configurações de integração salvas com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao salvar integrações:', err);
+      alert('Erro ao salvar integrações: ' + err.message);
+    } finally {
+      setSavingIntegrations(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTenant) {
       fetchProcedures();
       fetchStaff();
+      fetchIntegrations();
     }
     if (role === 'super_admin') {
       fetchAllTenants();
@@ -749,6 +832,151 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
               </div>
             )}
           </div>
+        </div>
+
+        {/* Configurações de Integração e IA */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>
+            <Settings size={20} style={{ color: 'hsl(var(--primary))' }} />
+            Integrações e IA (WhatsApp, SMS e Gemini)
+          </h2>
+          <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', lineHeight: '1.5', marginTop: '-8px' }}>
+            Configure seus canais de comunicação com pacientes e chaves de inteligência artificial individuais para sua clínica.
+          </p>
+
+          <form className={styles.form} onSubmit={handleSaveIntegrations} style={{ borderTop: 'none', paddingTop: 0 }}>
+            {/* WhatsApp - UAZAPI */}
+            <div style={{ background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: '10px', border: '1px solid hsl(var(--border-color))' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'hsl(var(--text-main))', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#25d366' }}></span>
+                WhatsApp (Gateway UAZAPI)
+              </h3>
+              
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>ID da Instância UAZAPI</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={uazapiInstanceId}
+                  onChange={(e) => setUazapiInstanceId(e.target.value)}
+                  placeholder="Ex: L12345678"
+                />
+              </div>
+
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>Token da Instância UAZAPI</label>
+                <input 
+                  type="password" 
+                  className={styles.input} 
+                  value={uazapiToken}
+                  onChange={(e) => setUazapiToken(e.target.value)}
+                  placeholder="Seu token secreto da UAZAPI"
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                <input 
+                  type="checkbox" 
+                  id="whatsapp_conectado" 
+                  checked={whatsappConectado}
+                  onChange={(e) => setWhatsappConectado(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <label htmlFor="whatsapp_conectado" style={{ fontSize: '13px', fontWeight: 600, color: 'hsl(var(--text-main))', cursor: 'pointer' }}>
+                  Marcar WhatsApp como Conectado / Ativo
+                </label>
+              </div>
+            </div>
+
+            {/* SMS - Twilio */}
+            <div style={{ background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: '10px', border: '1px solid hsl(var(--border-color))', marginTop: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'hsl(var(--text-main))', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <Smartphone size={16} style={{ color: '#f22f46' }} />
+                SMS (Fallback Twilio - Opcional)
+              </h3>
+              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '11px', marginBottom: '12px', marginTop: '-8px' }}>
+                Preencha para usar seu próprio canal de SMS. Se deixado em branco, a plataforma usará a configuração padrão do sistema.
+              </p>
+
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>Twilio Account SID</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={twilioAccountSid}
+                  onChange={(e) => setTwilioAccountSid(e.target.value)}
+                  placeholder="Ex: ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                />
+              </div>
+
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>Twilio Auth Token</label>
+                <input 
+                  type="password" 
+                  className={styles.input} 
+                  value={twilioAuthToken}
+                  onChange={(e) => setTwilioAuthToken(e.target.value)}
+                  placeholder="Seu token de autenticação do Twilio"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Número Remetente do Twilio (From)</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={twilioFromNumber}
+                  onChange={(e) => setTwilioFromNumber(e.target.value)}
+                  placeholder="Ex: +15017122661"
+                />
+              </div>
+            </div>
+
+            {/* IA - Gemini */}
+            <div style={{ background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: '10px', border: '1px solid hsl(var(--border-color))', marginTop: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'hsl(var(--text-main))', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <Sparkles size={16} style={{ color: 'hsl(var(--primary))' }} />
+                Assistente de IA (Google Gemini - Opcional)
+              </h3>
+              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '11px', marginBottom: '12px', marginTop: '-8px' }}>
+                Forneça sua própria API Key do Google AI Studio se desejar gerenciar seus custos ou utilizar um modelo do Gemini específico para a clínica.
+              </p>
+
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>Chave de API do Gemini (GEMINI_API_KEY)</label>
+                <input 
+                  type="password" 
+                  className={styles.input} 
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  placeholder="API Key do Google AI Studio"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Modelo do Gemini</label>
+                <select
+                  value={geminiModel}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                  className={styles.input}
+                  style={{ background: 'hsl(var(--bg-app))', color: 'white', cursor: 'pointer' }}
+                >
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Recomendado — Rápido e Eficiente)</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Ideal para raciocínios complexos)</option>
+                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Experimental</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" className={styles.actionBtn} disabled={savingIntegrations} style={{ width: '100%', marginTop: '20px' }}>
+              {savingIntegrations ? (
+                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Plus size={16} />
+              )}
+              <span>{savingIntegrations ? 'Salvando Configurações...' : 'Salvar Todas as Configurações'}</span>
+            </button>
+          </form>
         </div>
       </div>
     </div>
