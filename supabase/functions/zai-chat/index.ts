@@ -56,6 +56,102 @@ async function get_waiting_patients(supabaseClient: any) {
   return { waiting_patients: data };
 }
 
+async function send_patient_message(
+  supabaseClient: any,
+  tenantId: string,
+  senderId: string,
+  senderName: string,
+  patientName: string,
+  message: string,
+  channel: string,
+  authHeader: string
+) {
+  // 1. Localizar paciente
+  const { data: patient, error: patientError } = await supabaseClient
+    .from('patients')
+    .select('id, name, phone')
+    .eq('tenant_id', tenantId)
+    .ilike('name', `%${patientName}%`)
+    .limit(1)
+    .maybeSingle();
+
+  if (patientError || !patient) {
+    return { error: `Paciente '${patientName}' não encontrado.` };
+  }
+
+  const phone = patient.phone;
+  if (!phone) {
+    return { error: `Paciente '${patient.name}' não possui telefone cadastrado.` };
+  }
+
+  // 2. Chamar a Edge Function send-message
+  const functionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-message`;
+  try {
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        phone,
+        message,
+        channel
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return { error: `Erro no envio da mensagem: ${errText}` };
+    }
+  } catch (err: any) {
+    return { error: `Falha de rede ao disparar mensagem: ${err.message || err}` };
+  }
+
+  // 3. Gravar no histórico de chat do paciente
+  let chatId: string;
+  const { data: existingChat } = await supabaseClient
+    .from('zai_chats')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('patient_id', patient.id)
+    .maybeSingle();
+
+  if (existingChat) {
+    chatId = existingChat.id;
+  } else {
+    const { data: newChat, error: createError } = await supabaseClient
+      .from('zai_chats')
+      .insert({
+        tenant_id: tenantId,
+        type: 'patient',
+        title: `${patient.name} (Paciente)`,
+        patient_id: patient.id
+      })
+      .select('id')
+      .single();
+    
+    if (createError || !newChat) {
+      return { error: `Erro ao criar canal de chat para o paciente.` };
+    }
+    chatId = newChat.id;
+  }
+
+  await supabaseClient
+    .from('zai_messages')
+    .insert({
+      chat_id: chatId,
+      tenant_id: tenantId,
+      sender_id: senderId,
+      sender_name: senderName,
+      sender_role: 'staff',
+      text: `[${channel === 'sms' ? 'SMS' : 'WhatsApp'} via IA Zai] ${message}`
+    });
+
+  return { success: true, message: `Mensagem enviada com sucesso para ${patient.name} via ${channel}.` };
+}
+
 serve(async (req) => {
   // Tratar requisições OPTIONS (CORS Preflight)
   if (req.method === 'OPTIONS') {
@@ -249,6 +345,19 @@ Seja conciso, profissional, gentil e direto.`
             name: "get_waiting_patients",
             description: "Retorna a lista de pacientes que estão na sala de espera agora.",
             parameters: { type: "OBJECT", properties: {} }
+          },
+          {
+            name: "send_patient_message",
+            description: "Envia uma mensagem (WhatsApp ou SMS) para um paciente da clínica pelo seu nome.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                patient_name: { type: "STRING", description: "Nome completo ou parcial do paciente" },
+                message: { type: "STRING", description: "Texto da mensagem a ser enviada" },
+                channel: { type: "STRING", enum: ["whatsapp", "sms"], description: "Canal de envio (whatsapp ou sms)" }
+              },
+              required: ["patient_name", "message", "channel"]
+            }
           }
         ]
       }
@@ -298,6 +407,9 @@ Seja conciso, profissional, gentil e direto.`
             functionResponse = await get_financial_summary(supabaseClient, start_date, end_date);
           } else if (name === "get_waiting_patients") {
             functionResponse = await get_waiting_patients(supabaseClient);
+          } else if (name === "send_patient_message") {
+            const { patient_name, message: msgText, channel: msgChannel } = args;
+            functionResponse = await send_patient_message(supabaseClient, tenantId, user.id, senderName, patient_name, msgText, msgChannel, authHeader);
           } else {
             throw new Error(`Ferramenta desconhecida: ${name}`);
           }

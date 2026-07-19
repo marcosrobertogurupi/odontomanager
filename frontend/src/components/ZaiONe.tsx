@@ -8,7 +8,8 @@ import {
   Sparkles,
   Smartphone,
   Video,
-  Loader
+  Loader,
+  Plus
 } from 'lucide-react';
 import styles from './ZaiONe.module.css';
 import { supabase } from '../lib/supabaseClient';
@@ -51,6 +52,10 @@ export default function ZaiONe() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+
+  // Estados para iniciar nova conversa com paciente
+  const [patients, setPatients] = useState<any[]>([]);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
 
   const messageEndRef = useRef<HTMLDivElement>(null);
 
@@ -211,7 +216,63 @@ export default function ZaiONe() {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Enviar mensagem
+  // Novo chat com paciente
+  const handleNewChatClick = async () => {
+    if (!activeTenant) return;
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, name, phone')
+        .eq('tenant_id', activeTenant.id)
+        .order('name');
+
+      if (error) throw error;
+      setPatients(data || []);
+      setShowPatientSelector(prev => !prev);
+    } catch (err) {
+      console.error('Erro ao buscar pacientes:', err);
+    }
+  };
+
+  const handleStartPatientChat = async (patient: any) => {
+    if (!activeTenant || !user) return;
+    try {
+      const { data: existingChat, error: findError } = await supabase
+        .from('zai_chats')
+        .select('id')
+        .eq('tenant_id', activeTenant.id)
+        .eq('patient_id', patient.id)
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (existingChat) {
+        setActiveChatId(existingChat.id);
+      } else {
+        const { data: newChat, error: createError } = await supabase
+          .from('zai_chats')
+          .insert({
+            tenant_id: activeTenant.id,
+            type: 'patient',
+            title: `${patient.name} (Paciente)`,
+            patient_id: patient.id
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        
+        await fetchChats();
+        setActiveChatId(newChat.id);
+      }
+      setShowPatientSelector(false);
+    } catch (err: any) {
+      console.error('Erro ao iniciar chat com paciente:', err);
+      alert('Erro ao iniciar chat: ' + err.message);
+    }
+  };
+
+  // Enviar mensagem (orientado puramente a banco/Realtime para evitar duplicidade)
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !activeTenant || !user || !profile || !activeChatId) return;
@@ -226,25 +287,6 @@ export default function ZaiONe() {
 
       if (activeChat.type === 'zai_assistant') {
         const isNew = activeChatId === 'new-zai-assistant';
-
-        // Resposta otimista temporária do usuário no chat
-        const tempMsg: ZaiMessage = {
-          id: 'temp-' + Math.random(),
-          chat_id: activeChatId,
-          tenant_id: activeTenant.id,
-          sender_id: user.id,
-          sender_name: profile.name || 'Profissional',
-          sender_role: 'staff',
-          text: textToSend,
-          created_at: new Date().toISOString()
-        };
-        
-        // Se for conversa nova, limpa a mensagem de boas-vindas mockada antes
-        if (isNew) {
-          setMessages([tempMsg]);
-        } else {
-          setMessages(prev => [...prev, tempMsg]);
-        }
 
         const reqBody = {
           message: textToSend,
@@ -261,40 +303,10 @@ export default function ZaiONe() {
           // Recarrega todos os chats reais e seleciona o ID definitivo retornado
           await fetchChats();
           setActiveChatId(data.chat_id);
-        } else {
-          // Adiciona resposta da IA localmente
-          const aiMsg: ZaiMessage = {
-            id: 'temp-ai-' + Math.random(),
-            chat_id: activeChatId,
-            tenant_id: activeTenant.id,
-            sender_id: null,
-            sender_name: 'Zai',
-            sender_role: 'zai_assistant',
-            text: data?.reply || '',
-            created_at: new Date().toISOString()
-          };
-          setMessages(prev => {
-            // Remove a mensagem temporária do usuário se o Realtime ainda não inseriu a real
-            const filtered = prev.filter(m => !m.id.startsWith('temp-'));
-            return [...filtered, aiMsg];
-          });
-
-          // Atualizar barra lateral
-          setChats(prev => prev.map(c => {
-            if (c.id === activeChatId) {
-              return {
-                ...c,
-                preview: data?.reply || '',
-                updated_at: new Date().toISOString()
-              };
-            }
-            return c;
-          }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
         }
-
       } else {
         // Chat normal (paciente/equipe): gravação síncrona direta via Supabase
-        const { data: newMsg, error } = await supabase
+        const { error } = await supabase
           .from('zai_messages')
           .insert({
             chat_id: activeChatId,
@@ -303,27 +315,9 @@ export default function ZaiONe() {
             sender_name: profile.name || 'Profissional',
             sender_role: 'staff',
             text: textToSend
-          })
-          .select()
-          .single();
+          });
 
         if (error) throw error;
-
-        setMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-
-        setChats(prev => prev.map(c => {
-          if (c.id === activeChatId) {
-            return {
-              ...c,
-              preview: textToSend,
-              updated_at: newMsg.created_at
-            };
-          }
-          return c;
-        }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
       }
     } catch (err: any) {
       console.error('Erro ao enviar mensagem:', err);
@@ -549,9 +543,61 @@ export default function ZaiONe() {
     <div className={styles.container}>
       {/* Coluna Esquerda: Lista de Conversas */}
       <div className={styles.sidebar}>
-        <div className={styles.sidebarHeader}>
+        <div className={styles.sidebarHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className={styles.sidebarTitle}>Canais de Conversa</span>
+          <button 
+            onClick={handleNewChatClick}
+            style={{
+              background: 'hsl(var(--primary))',
+              color: 'white',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <Plus size={12} />
+            <span>Novo</span>
+          </button>
         </div>
+
+        {showPatientSelector && (
+          <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid hsl(var(--border-color))', maxHeight: '180px', overflowY: 'auto' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'hsl(var(--text-muted))', marginBottom: '8px' }}>Iniciar conversa com:</p>
+            {patients.length > 0 ? (
+              patients.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => handleStartPatientChat(p)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  {p.name}
+                </button>
+              ))
+            ) : (
+              <p style={{ fontSize: '11px', color: 'hsl(var(--text-muted))' }}>Nenhum paciente cadastrado.</p>
+            )}
+          </div>
+        )}
         <div className={styles.chatList}>
           {chats.map(chat => (
             <button
@@ -626,6 +672,15 @@ export default function ZaiONe() {
                     </div>
                   </div>
                 ))
+              )}
+              {sendingMessage && activeChat.type === 'zai_assistant' && (
+                <div 
+                  className={`${styles.messageBubble} ${styles.received}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8, background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.1)' }}
+                >
+                  <Loader className={styles.spinner} size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '13px', color: 'hsl(var(--text-muted))' }}>Zai está pensando...</span>
+                </div>
               )}
               <div ref={messageEndRef} />
             </div>
