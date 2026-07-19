@@ -970,16 +970,13 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
 
               <div className={styles.formGroup}>
                 <label>Modelo do Gemini</label>
-                <select
+                <input 
+                  type="text" 
+                  className={styles.input} 
                   value={geminiModel}
                   onChange={(e) => setGeminiModel(e.target.value)}
-                  className={styles.input}
-                  style={{ background: 'hsl(var(--bg-app))', color: 'white', cursor: 'pointer' }}
-                >
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Recomendado — Rápido e Eficiente)</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Ideal para raciocínios complexos)</option>
-                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Experimental</option>
-                </select>
+                  placeholder="Ex: gemini-1.5-flash"
+                />
               </div>
             </div>
 
