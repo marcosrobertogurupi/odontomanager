@@ -75,7 +75,9 @@ serve(async (req) => {
         throw new Error("Instância do UAZAPI não configurada para este tenant.")
       }
 
-      const url = `https://api.uazapi.com/instance/${integration.uazapi_instance_id}/sendMessage`
+      const serverUrl = integration.uazapi_server_url || 'https://api.uazapi.com'
+      const cleanServerUrl = serverUrl.replace(/\/$/, '')
+      const url = `${cleanServerUrl}/instance/${integration.uazapi_instance_id}/sendMessage`
 
       const response = await fetch(url, {
         method: 'POST',

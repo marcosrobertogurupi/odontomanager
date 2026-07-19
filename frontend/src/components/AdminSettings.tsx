@@ -55,6 +55,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [uploading, setUploading] = useState(false);
 
   // Configurações de Integração
+  const [uazapiServerUrl, setUazapiServerUrl] = useState('');
   const [uazapiInstanceId, setUazapiInstanceId] = useState('');
   const [uazapiToken, setUazapiToken] = useState('');
   const [whatsappConectado, setWhatsappConectado] = useState(false);
@@ -255,6 +256,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       if (error) throw error;
 
       if (data) {
+        setUazapiServerUrl(data.uazapi_server_url || '');
         setUazapiInstanceId(data.uazapi_instance_id || '');
         setUazapiToken(data.uazapi_token || '');
         setWhatsappConectado(data.whatsapp_conectado || false);
@@ -264,6 +266,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
         setGeminiApiKey(data.gemini_api_key || '');
         setGeminiModel(data.gemini_model || 'gemini-1.5-flash');
       } else {
+        setUazapiServerUrl('');
         setUazapiInstanceId('');
         setUazapiToken('');
         setWhatsappConectado(false);
@@ -289,6 +292,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
         .from('tenant_integrations')
         .upsert({
           tenant_id: activeTenant.id,
+          uazapi_server_url: uazapiServerUrl || null,
           uazapi_instance_id: uazapiInstanceId || null,
           uazapi_token: uazapiToken || null,
           whatsapp_conectado: whatsappConectado,
@@ -853,13 +857,24 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
               </h3>
               
               <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
-                <label>ID da Instância UAZAPI</label>
+                <label>URL do Servidor UAZAPI (Server URL)</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={uazapiServerUrl}
+                  onChange={(e) => setUazapiServerUrl(e.target.value)}
+                  placeholder="Ex: https://netservice.uazapi.com"
+                />
+              </div>
+
+              <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
+                <label>Nome/ID da Instância UAZAPI</label>
                 <input 
                   type="text" 
                   className={styles.input} 
                   value={uazapiInstanceId}
                   onChange={(e) => setUazapiInstanceId(e.target.value)}
-                  placeholder="Ex: L12345678"
+                  placeholder="Ex: n8n_barbearia"
                 />
               </div>
 
