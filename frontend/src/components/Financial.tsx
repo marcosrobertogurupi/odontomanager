@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Plus, 
   ArrowUpRight, 
@@ -31,7 +31,7 @@ interface FinancialProps {
 export default function Financial({ selectedUnit }: FinancialProps) {
   const { activeTenant } = useTenant();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState({ income: 0, expense: 0, net: 0 });
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Form Fields
@@ -39,6 +39,18 @@ export default function Financial({ selectedUnit }: FinancialProps) {
   const [formType, setFormType] = useState<'income' | 'expense'>('income');
   const [formAmount, setFormAmount] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Calcula o resumo sempre que transactions mudar — sem estado separado
+  const summary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    transactions.forEach((tx) => {
+      const amt = Number(tx.amount);
+      if (tx.type === 'income') income += amt;
+      else if (tx.type === 'expense') expense += amt;
+    });
+    return { income, expense, net: income - expense };
+  }, [transactions]);
 
   const fetchFinancialData = async () => {
     if (!activeTenant || !selectedUnit) return;
@@ -52,16 +64,6 @@ export default function Financial({ selectedUnit }: FinancialProps) {
 
       if (error) throw error;
       setTransactions(data || []);
-
-      // Calcular o resumo das transações da unidade selecionada
-      let income = 0;
-      let expense = 0;
-      (data || []).forEach((tx: any) => {
-        if (tx.type === 'income') income += Number(tx.amount);
-        else if (tx.type === 'expense') expense += Number(tx.amount);
-      });
-
-      setSummary({ income, expense, net: income - expense });
     } catch (err) {
       console.error('Erro ao buscar dados financeiros:', err);
     }
