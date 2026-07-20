@@ -14,7 +14,8 @@ import {
   Trash2,
   Sparkles,
   Smartphone,
-  Loader
+  Loader,
+  KeyRound
 } from 'lucide-react';
 import styles from './AdminSettings.module.css';
 import { useTenant } from '../contexts/TenantContext';
@@ -79,6 +80,13 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [clinicCep, setClinicCep] = useState('');
   const [clinicWebsite, setClinicWebsite] = useState('');
   const [savingDetails, setSavingDetails] = useState(false);
+
+  // Alterar Senha
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
   // Novo Procedimento
   const [formName, setFormName] = useState('');
@@ -371,6 +379,51 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       alert('Erro ao salvar dados cadastrais: ' + err.message);
     } finally {
       setSavingDetails(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+
+    if (newPassword.length < 8) {
+      setPasswordMsg({ type: 'error', text: 'A nova senha deve ter pelo menos 8 caracteres.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'A nova senha e a confirmação não coincidem.' });
+      return;
+    }
+
+    try {
+      setSavingPassword(true);
+
+      // Re-autentica com senha atual para validar
+      const { data: sessionData } = await supabase.auth.getSession();
+      const email = sessionData.session?.user?.email;
+      if (!email) throw new Error('Sessão inválida. Faça login novamente.');
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword
+      });
+      if (signInError) {
+        setPasswordMsg({ type: 'error', text: 'Senha atual incorreta.' });
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      setPasswordMsg({ type: 'success', text: 'Senha alterada com sucesso!' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      console.error('Erro ao alterar senha:', err);
+      setPasswordMsg({ type: 'error', text: err.message || 'Erro ao alterar senha.' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -1206,6 +1259,90 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
             </button>
           </form>
         </div>
+
+        {/* Card Alterar Senha */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>
+            <KeyRound size={20} style={{ color: 'hsl(var(--primary))' }} />
+            Alterar Senha de Acesso
+          </h2>
+          <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
+            Altere a senha da sua conta. Confirme sua senha atual antes de definir uma nova.
+          </p>
+
+          <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className={styles.formGroup}>
+              <label>Senha Atual</label>
+              <input
+                type="password"
+                className={styles.input}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Nova Senha</label>
+              <input
+                type="password"
+                className={styles.input}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Confirmar Nova Senha</label>
+              <input
+                type="password"
+                className={styles.input}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a nova senha"
+                required
+                autoComplete="new-password"
+              />
+            </div>
+
+            {passwordMsg && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 500,
+                background: passwordMsg.type === 'success'
+                  ? 'rgba(16, 185, 129, 0.12)'
+                  : 'rgba(239, 68, 68, 0.12)',
+                color: passwordMsg.type === 'success'
+                  ? 'hsl(var(--success))'
+                  : 'hsl(var(--danger))'
+              }}>
+                {passwordMsg.text}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className={styles.actionBtn}
+              disabled={savingPassword}
+              style={{ width: '100%', justifyContent: 'center', marginTop: '4px' }}
+            >
+              {savingPassword ? (
+                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <KeyRound size={16} />
+              )}
+              <span>{savingPassword ? 'Alterando...' : 'Alterar Senha'}</span>
+            </button>
+          </form>
+        </div>
+
       </div>
     </div>
   );
