@@ -9,6 +9,7 @@ import Patients from './components/Patients';
 import Financial from './components/Financial';
 import AdminSettings from './components/AdminSettings';
 import InventoryCosts from './components/InventoryCosts';
+import Papelaria from './components/Papelaria';
 import { TenantProvider, useTenant } from './contexts/TenantContext';
 import { AuthScreen } from './components/AuthScreen';
 import { supabase } from './lib/supabaseClient';
@@ -79,6 +80,7 @@ function AppContent() {
       patients: ['clinic_owner', 'admin', 'dentist', 'receptionist'],
       financial: ['clinic_owner', 'admin', 'finance'],
       'inventory-costs': ['clinic_owner', 'admin', 'finance'],
+      papelaria: ['clinic_owner', 'admin', 'dentist'],
       admin: ['clinic_owner', 'admin', 'super_admin']
     };
     
@@ -188,6 +190,8 @@ function AppContent() {
         return <Financial selectedUnit={selectedUnit} />;
       case 'inventory-costs':
         return <InventoryCosts selectedUnit={selectedUnit} />;
+      case 'papelaria':
+        return <Papelaria selectedUnit={units.find(u => u.id === selectedUnit)} />;
       case 'admin':
         return <AdminSettings units={units} fetchUnits={fetchUnits} />;
       default:

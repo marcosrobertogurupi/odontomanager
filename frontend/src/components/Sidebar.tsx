@@ -9,7 +9,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Boxes
+  Boxes,
+  FileText
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import { useTenant } from '../contexts/TenantContext';
@@ -33,6 +34,7 @@ export default function Sidebar({ currentTab, setCurrentTab, isCollapsed, setIsC
     { id: 'appointments', label: 'Agendamentos', icon: CalendarDays, roles: ['clinic_owner', 'admin', 'dentist', 'receptionist'] },
     { id: 'zai-chat', label: 'Conversas ZaiONe', icon: MessageSquare, roles: ['clinic_owner', 'admin', 'dentist', 'receptionist', 'finance'] },
     { id: 'patients', label: 'Pacientes', icon: Users, roles: ['clinic_owner', 'admin', 'dentist', 'receptionist'] },
+    { id: 'papelaria', label: 'Papelaria', icon: FileText, roles: ['clinic_owner', 'admin', 'dentist'] },
     { id: 'financial', label: 'Movimentações', icon: CircleDollarSign, roles: ['clinic_owner', 'admin', 'finance'] },
     { id: 'inventory-costs', label: 'Custos & Estoque', icon: Boxes, roles: ['clinic_owner', 'admin', 'finance'] },
     { id: 'admin', label: 'Administração', icon: Settings, roles: ['clinic_owner', 'admin', 'super_admin'] },

@@ -85,11 +85,17 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   const [isNewCustoOpen, setIsNewCustoOpen] = useState(false);
   const [isAjusteManualOpen, setIsAjusteManualOpen] = useState(false);
 
+  // Unidades de Medida
+  const [unidadesMedida, setUnidadesMedida] = useState<any[]>([]);
+  const [isUnidadesMedidaOpen, setIsUnidadesMedidaOpen] = useState(false);
+  const [unitInput, setUnitInput] = useState('');
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+
   // Formulários
   const [formInsumo, setFormInsumo] = useState({
     nome: '',
     categoria: 'Descartáveis',
-    unidade_medida: 'unidade',
+    unidade_medida: '',
     quantidade_embalagem: '',
     quantidade_rendimento: '',
     preco_embalagem_atual: '',
@@ -133,7 +139,8 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
         fetchInsumosAndEstoque(),
         fetchMovements(),
         fetchProcedures(),
-        fetchRentabilidade()
+        fetchRentabilidade(),
+        fetchUnidadesMedida()
       ]);
     } catch (err) {
       console.error('Erro ao buscar dados:', err);
@@ -145,6 +152,233 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   useEffect(() => {
     fetchAll();
   }, [activeTenant, selectedUnit]);
+
+  // 1. Assinatura Realtime para Custos Fixos
+  useEffect(() => {
+    if (!activeTenant || !selectedUnit) return;
+
+    const channel = supabase
+      .channel('realtime_custos_fixos')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'custos_fixos',
+          filter: `tenant_id=eq.${activeTenant.id}`,
+        },
+        (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          
+          if (eventType === 'INSERT') {
+            const newItem = newRecord as any;
+            if (newItem.unit_id === selectedUnit) {
+              setCustosFixos((prev) => {
+                if (prev.some(c => c.id === newItem.id)) return prev;
+                return [...prev, newItem].sort((a, b) => a.nome_custo.localeCompare(b.nome_custo));
+              });
+            }
+          } else if (eventType === 'UPDATE') {
+            const updatedItem = newRecord as any;
+            if (updatedItem.unit_id === selectedUnit) {
+              setCustosFixos((prev) =>
+                prev.map(c => c.id === updatedItem.id ? updatedItem : c)
+                  .sort((a, b) => a.nome_custo.localeCompare(b.nome_custo))
+              );
+            } else {
+              setCustosFixos((prev) => prev.filter(c => c.id !== updatedItem.id));
+            }
+          } else if (eventType === 'DELETE') {
+            const deletedItem = oldRecord as any;
+            setCustosFixos((prev) => prev.filter(c => c.id !== deletedItem.id));
+          }
+          
+          fetchRentabilidade();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant, selectedUnit]);
+
+  // 2. Assinatura Realtime para Parâmetros da Unidade
+  useEffect(() => {
+    if (!activeTenant || !selectedUnit) return;
+
+    const channel = supabase
+      .channel('realtime_parametros_custo')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'parametros_custo_unidade',
+          filter: `unit_id=eq.${selectedUnit}`,
+        },
+        (payload) => {
+          const { eventType, new: newRecord } = payload;
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const p = newRecord as any;
+            setParamId(p.id);
+            setNumeroCadeiras(p.numero_cadeiras);
+            setHorasFuncionamentoMes(Number(p.horas_funcionamento_mes));
+            setHorasOcupadasMes(Number(p.horas_ocupadas_mes));
+          } else if (eventType === 'DELETE') {
+            setParamId(null);
+            setNumeroCadeiras(1);
+            setHorasFuncionamentoMes(160);
+            setHorasOcupadasMes(120);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant, selectedUnit]);
+
+  // 3. Assinatura Realtime para Insumos
+  useEffect(() => {
+    if (!activeTenant) return;
+
+    const channel = supabase
+      .channel('realtime_insumos_cost')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'insumos',
+          filter: `tenant_id=eq.${activeTenant.id}`,
+        },
+        (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if (eventType === 'INSERT') {
+            const newItem = newRecord as any;
+            setInsumos((prev) => {
+              if (prev.some(i => i.id === newItem.id)) return prev;
+              return [...prev, newItem].sort((a, b) => a.nome.localeCompare(b.nome));
+            });
+          } else if (eventType === 'UPDATE') {
+            const updatedItem = newRecord as any;
+            setInsumos((prev) =>
+              prev.map(i => i.id === updatedItem.id ? updatedItem : i)
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+            );
+          } else if (eventType === 'DELETE') {
+            const deletedItem = oldRecord as any;
+            setInsumos((prev) => prev.filter(i => i.id !== deletedItem.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant]);
+
+  // 4. Assinatura Realtime para Estoque da Unidade
+  useEffect(() => {
+    if (!activeTenant || !selectedUnit) return;
+
+    const channel = supabase
+      .channel('realtime_estoque_cost')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'estoque_unidade',
+          filter: `unit_id=eq.${selectedUnit}`,
+        },
+        (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if (eventType === 'INSERT') {
+            const newItem = newRecord as any;
+            setEstoqueUnidade((prev) => {
+              if (prev.some(e => e.id === newItem.id)) return prev;
+              return [...prev, newItem];
+            });
+          } else if (eventType === 'UPDATE') {
+            const updatedItem = newRecord as any;
+            setEstoqueUnidade((prev) =>
+              prev.map(e => e.id === updatedItem.id ? updatedItem : e)
+            );
+          } else if (eventType === 'DELETE') {
+            const deletedItem = oldRecord as any;
+            setEstoqueUnidade((prev) => prev.filter(e => e.id !== deletedItem.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant, selectedUnit]);
+
+  // 5. Assinatura Realtime para Movimentações de Estoque
+  useEffect(() => {
+    if (!activeTenant || !selectedUnit) return;
+
+    const channel = supabase
+      .channel('realtime_movimentacoes_cost')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'movimentacoes_estoque',
+          filter: `unit_id=eq.${selectedUnit}`,
+        },
+        (payload) => {
+          const newItem = payload.new as any;
+          setMovements((prev) => {
+            if (prev.some(m => m.id === newItem.id)) return prev;
+            const insumo = insumos.find(i => i.id === newItem.insumo_id);
+            const fullItem = {
+              ...newItem,
+              insumo: insumo ? { nome: insumo.nome, unidade_medida: insumo.unidade_medida } : null
+            };
+            return [fullItem, ...prev].slice(0, 100);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant, selectedUnit, insumos]);
+
+  // 6. Assinatura Realtime para Unidades de Medida
+  useEffect(() => {
+    if (!activeTenant) return;
+
+    const channel = supabase
+      .channel('realtime_unidades_medida')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'unidades_medida',
+          filter: `tenant_id=eq.${activeTenant.id}`,
+        },
+        () => {
+          fetchUnidadesMedida();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant]);
 
   // 1. Buscar parâmetros e custos fixos
   const fetchParametersAndCosts = async () => {
@@ -258,6 +492,140 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
       setRentabilidadeData(data || []);
     } catch (err) {
       console.error('Erro ao buscar rentabilidade:', err);
+    }
+  };
+
+  // 5.5. Buscar unidades de medida
+  const fetchUnidadesMedida = async () => {
+    if (!activeTenant) return;
+    try {
+      const { data, error } = await supabase
+        .from('unidades_medida')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .order('nome');
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        // Se não houver unidades de medida cadastradas, insere as padrão
+        const defaults = ['unidade', 'ml', 'grama', 'tubete', 'caixa'];
+        const insertData = defaults.map(name => ({
+          tenant_id: activeTenant.id,
+          nome: name
+        }));
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from('unidades_medida')
+          .insert(insertData)
+          .select();
+
+        if (insertErr) throw insertErr;
+        setUnidadesMedida(inserted || []);
+        
+        if (inserted && inserted.length > 0 && !formInsumo.unidade_medida) {
+          setFormInsumo(prev => ({ ...prev, unidade_medida: inserted[0].nome }));
+        }
+      } else {
+        setUnidadesMedida(data);
+        if (data.length > 0 && !formInsumo.unidade_medida) {
+          setFormInsumo(prev => ({ ...prev, unidade_medida: data[0].nome }));
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar unidades de medida:', err);
+    }
+  };
+
+  const handleSaveUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unitInput.trim() || !activeTenant) return;
+
+    const newName = unitInput.trim().toLowerCase();
+
+    // Validar duplicado localmente antes de enviar
+    const isDuplicate = unidadesMedida.some(u => u.nome === newName && u.id !== editingUnitId);
+    if (isDuplicate) {
+      alert('Esta unidade de medida já está cadastrada.');
+      return;
+    }
+
+    try {
+      if (editingUnitId) {
+        const oldUnit = unidadesMedida.find(u => u.id === editingUnitId);
+
+        const { error: updateErr } = await supabase
+          .from('unidades_medida')
+          .update({ nome: newName })
+          .eq('id', editingUnitId);
+
+        if (updateErr) throw updateErr;
+
+        if (oldUnit && oldUnit.nome !== newName) {
+          const { error: insumoErr } = await supabase
+            .from('insumos')
+            .update({ unidade_medida: newName })
+            .eq('tenant_id', activeTenant.id)
+            .eq('unidade_medida', oldUnit.nome);
+          if (insumoErr) {
+            console.error('Erro ao atualizar insumos com o novo nome da unidade:', insumoErr);
+          }
+        }
+
+        setEditingUnitId(null);
+      } else {
+        const { error: insertErr } = await supabase
+          .from('unidades_medida')
+          .insert({ tenant_id: activeTenant.id, nome: newName });
+
+        if (insertErr) throw insertErr;
+      }
+      setUnitInput('');
+      fetchUnidadesMedida();
+      fetchInsumosAndEstoque();
+    } catch (err: any) {
+      console.error('Erro ao salvar unidade de medida:', err);
+      alert('Erro ao salvar unidade de medida: ' + (err.message || err));
+    }
+  };
+
+  const handleDeleteUnit = async (id: string, name: string) => {
+    if (!activeTenant) return;
+
+    if (name === 'unidade') {
+      alert('A unidade padrão "unidade" não pode ser excluída.');
+      return;
+    }
+
+    const count = insumos.filter(i => i.unidade_medida === name).length;
+    let confirmMsg = `Tem certeza que deseja excluir a unidade "${name}"?`;
+    if (count > 0) {
+      confirmMsg = `A unidade "${name}" está associada a ${count} insumo(s). Se você a excluir, esses insumos serão atualizados para a unidade padrão ("unidade"). Deseja continuar?`;
+    }
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      if (count > 0) {
+        const { error: insumoErr } = await supabase
+          .from('insumos')
+          .update({ unidade_medida: 'unidade' })
+          .eq('tenant_id', activeTenant.id)
+          .eq('unidade_medida', name);
+        if (insumoErr) throw insumoErr;
+      }
+
+      const { error: deleteErr } = await supabase
+        .from('unidades_medida')
+        .delete()
+        .eq('id', id);
+
+      if (deleteErr) throw deleteErr;
+
+      fetchUnidadesMedida();
+      fetchInsumosAndEstoque();
+    } catch (err: any) {
+      console.error('Erro ao excluir unidade de medida:', err);
+      alert('Erro ao excluir unidade de medida: ' + (err.message || err));
     }
   };
 
@@ -507,7 +875,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
     setFormInsumo({
       nome: '',
       categoria: 'Descartáveis',
-      unidade_medida: 'unidade',
+      unidade_medida: unidadesMedida[0]?.nome || 'unidade',
       quantidade_embalagem: '',
       quantidade_rendimento: '',
       preco_embalagem_atual: '',
@@ -526,6 +894,20 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
       fetchInsumosAndEstoque();
     } catch (err: any) {
       alert('Erro ao alterar status: ' + err.message);
+    }
+  };
+
+  const handleDeleteInsumo = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este insumo? Isso removerá o item do catálogo, todos os saldos de estoque e fichas técnicas associados.')) return;
+    try {
+      const { error } = await supabase
+        .from('insumos')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      fetchInsumosAndEstoque();
+    } catch (err: any) {
+      alert('Erro ao excluir insumo: ' + err.message);
     }
   };
 
@@ -712,7 +1094,10 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   // 1. Custo Hora Clínica
   const totalCustosFixosMensais = custosFixos
     .filter(cf => cf.ativo)
-    .reduce((acc, curr) => acc + Number(curr.valor_mensal), 0);
+    .reduce((acc, curr) => {
+      const val = Number(curr.valor_mensal);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
 
   const calculatedCustoHoraClinica = horasOcupadasMes > 0 
     ? totalCustosFixosMensais / horasOcupadasMes 
@@ -891,6 +1276,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                     <th>Preço Embalagem</th>
                     <th>Custo Unitário</th>
                     <th>Status</th>
+                    {isAdmin && <th>Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -925,12 +1311,24 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                               {i.ativo ? 'Ativo' : 'Inativo'}
                             </span>
                           </td>
+                          {isAdmin && (
+                            <td>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => openEditInsumo(i)} className={styles.closeBtn} title="Editar">
+                                  <Edit2 size={14} />
+                                </button>
+                                <button onClick={() => handleDeleteInsumo(i.id)} className={styles.removeBtn} title="Excluir">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum insumo cadastrado no sistema.</td>
+                      <td colSpan={isAdmin ? 8 : 7} style={{ textAlign: 'center', padding: '24px' }}>Nenhum insumo cadastrado no sistema.</td>
                     </tr>
                   )}
                 </tbody>
@@ -995,10 +1393,15 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>Materiais e Insumos Cadastrados</h2>
             {isAdmin && (
-              <button onClick={() => { resetInsumoForm(); setIsNewInsumoOpen(true); }} className={styles.primaryBtn}>
-                <Plus size={14} />
-                Cadastrar Material
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setEditingUnitId(null); setUnitInput(''); setIsUnidadesMedidaOpen(true); }} className={styles.secondaryBtn}>
+                  Gerenciar Unidades
+                </button>
+                <button onClick={() => { resetInsumoForm(); setIsNewInsumoOpen(true); }} className={styles.primaryBtn}>
+                  <Plus size={14} />
+                  Cadastrar Material
+                </button>
+              </div>
             )}
           </div>
 
@@ -1051,6 +1454,9 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <button onClick={() => openEditInsumo(i)} className={styles.closeBtn} title="Editar">
                                 <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => handleDeleteInsumo(i.id)} className={styles.removeBtn} title="Excluir">
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -1628,6 +2034,8 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
             <label>Nome do Insumo / Material</label>
             <input 
               type="text" 
+              name="nome_insumo"
+              autoComplete="off"
               className={styles.input}
               placeholder="Ex: Anestésico Mepivacaína 2%"
               value={formInsumo.nome}
@@ -1660,11 +2068,9 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
               value={formInsumo.unidade_medida}
               onChange={(e) => setFormInsumo({ ...formInsumo, unidade_medida: e.target.value })}
             >
-              <option value="unidade">unidade</option>
-              <option value="ml">ml</option>
-              <option value="grama">grama</option>
-              <option value="tubete">tubete</option>
-              <option value="caixa">caixa</option>
+              {unidadesMedida.map((u) => (
+                <option key={u.id} value={u.nome}>{u.nome}</option>
+              ))}
             </select>
           </div>
 
@@ -1944,6 +2350,91 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
             Confirmar Ajuste
           </button>
         </form>
+      </div>
+
+      {/* =========================================================================
+          DRAWER: GERENCIAR UNIDADES DE MEDIDA
+          ========================================================================= */}
+      <div className={`${styles.overlay} ${isUnidadesMedidaOpen ? styles.overlayActive : ''}`} onClick={() => setIsUnidadesMedidaOpen(false)} />
+      <div className={`${styles.drawer} ${isUnidadesMedidaOpen ? styles.drawerActive : ''}`}>
+        <div className={styles.drawerHeader}>
+          <h3 className={styles.drawerTitle}>Gerenciar Unidades de Medida</h3>
+          <button className={styles.closeBtn} onClick={() => setIsUnidadesMedidaOpen(false)}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 4px' }}>
+          <form className={styles.form} onSubmit={handleSaveUnit} style={{ borderBottom: '1px solid hsl(var(--border-color))', paddingBottom: '20px' }}>
+            <div className={styles.formGroup}>
+              <label>{editingUnitId ? 'Editar Unidade de Medida' : 'Nova Unidade de Medida'}</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  className={styles.input}
+                  placeholder="Ex: bisnaga, rolo, pacote"
+                  value={unitInput}
+                  onChange={(e) => setUnitInput(e.target.value)}
+                  required
+                />
+                <button type="submit" className={styles.primaryBtn} style={{ whiteSpace: 'nowrap' }}>
+                  {editingUnitId ? 'Salvar' : 'Adicionar'}
+                </button>
+                {editingUnitId && (
+                  <button 
+                    type="button" 
+                    className={styles.secondaryBtn} 
+                    onClick={() => { setEditingUnitId(null); setUnitInput(''); }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
+          </form>
+
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'hsl(var(--text-main))' }}>Unidades Cadastradas</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '350px', overflowY: 'auto' }}>
+              {unidadesMedida.map((u) => (
+                <div 
+                  key={u.id} 
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    padding: '8px 12px', 
+                    backgroundColor: 'hsl(var(--bg-card))', 
+                    borderRadius: 'var(--radius-xs)', 
+                    border: '1px solid hsl(var(--border-color))' 
+                  }}
+                >
+                  <span style={{ textTransform: 'lowercase', fontWeight: 500, color: 'hsl(var(--text-main))' }}>{u.nome}</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button 
+                      onClick={() => { setEditingUnitId(u.id); setUnitInput(u.nome); }} 
+                      className={styles.closeBtn} 
+                      title="Editar"
+                      style={{ padding: '4px' }}
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    {u.nome !== 'unidade' && (
+                      <button 
+                        onClick={() => handleDeleteUnit(u.id, u.nome)} 
+                        className={styles.removeBtn} 
+                        title="Excluir"
+                        style={{ padding: '4px' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
