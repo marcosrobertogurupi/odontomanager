@@ -27,8 +27,10 @@ function AppContent() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [selectedUnit, setSelectedUnit] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Unidade selecionada derivada diretamente do contexto global (evita loops de re-renderização)
+  const selectedUnit = activeUnitId || (units.length > 0 ? units[0].id : '');
 
   const fetchUnits = async () => {
     if (!activeTenant) return;
@@ -41,10 +43,8 @@ function AppContent() {
 
       if (error) throw error;
       setUnits(data || []);
-      if (data && data.length > 0) {
-        const defaultUnit = activeUnitId || data[0].id;
-        setSelectedUnit(defaultUnit);
-        selectUnit(defaultUnit);
+      if (data && data.length > 0 && !activeUnitId) {
+        selectUnit(data[0].id);
       }
     } catch (err) {
       console.error('Erro ao buscar unidades:', err);
@@ -56,19 +56,6 @@ function AppContent() {
       fetchUnits();
     }
   }, [activeTenant]);
-
-  // Sincroniza a unidade selecionada com o contexto global
-  useEffect(() => {
-    if (activeUnitId && activeUnitId !== selectedUnit) {
-      setSelectedUnit(activeUnitId);
-    }
-  }, [activeUnitId, selectedUnit]);
-
-  useEffect(() => {
-    if (selectedUnit) {
-      selectUnit(selectedUnit);
-    }
-  }, [selectedUnit, selectUnit]);
 
   // Validar permissão da aba ativa ao mudar de role ou tab
   useEffect(() => {
@@ -221,7 +208,7 @@ function AppContent() {
         <Navbar 
           isSidebarCollapsed={isSidebarCollapsed} 
           selectedUnit={selectedUnit} 
-          setSelectedUnit={setSelectedUnit} 
+          setSelectedUnit={selectUnit} 
           units={units} 
           onSearch={setSearchTerm} 
         />

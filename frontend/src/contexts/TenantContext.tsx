@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 
@@ -143,10 +143,14 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Alterna a unidade ativa
-  const selectUnit = (unitId: string) => {
+  const selectUnit = useCallback((unitId: string) => {
     setActiveUnitId(unitId);
-    localStorage.setItem('odontomanager_active_unit_id', unitId);
-  };
+    if (unitId) {
+      localStorage.setItem('odontomanager_active_unit_id', unitId);
+    } else {
+      localStorage.removeItem('odontomanager_active_unit_id');
+    }
+  }, []);
 
   const logout = async () => {
     await supabase.auth.signOut();

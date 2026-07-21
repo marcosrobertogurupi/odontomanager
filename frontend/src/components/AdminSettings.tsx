@@ -12,6 +12,9 @@ import {
   Image,
   Upload,
   Trash2,
+  Edit2,
+  Check,
+  X,
   Sparkles,
   Smartphone,
   Loader,
@@ -106,9 +109,14 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [formDesc, setFormDesc] = useState('');
   const [formPrice, setFormPrice] = useState('');
 
-  // Nova Unidade
+  // Nova e Edição de Unidade
   const [unitName, setUnitName] = useState('');
   const [unitAddress, setUnitAddress] = useState('');
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingUnitName, setEditingUnitName] = useState('');
+  const [editingUnitAddress, setEditingUnitAddress] = useState('');
+  const [savingUnitEdit, setSavingUnitEdit] = useState(false);
+  const [inviteUnitId, setInviteUnitId] = useState<string>('');
 
   // Gerenciador de Avisos e Comunicados
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -257,9 +265,41 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
     }
   };
 
+  const handleUpdateStaffUnit = async (profileId: string, newUnitId: string) => {
+    if (!activeTenant) return;
+    const finalUnitId = newUnitId === '' ? null : newUnitId;
+
+    try {
+      // 1. Atualizar profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ unit_id: finalUnitId })
+        .eq('id', profileId);
+
+      if (profileError) throw profileError;
+
+      // 2. Atualizar users_tenants
+      const { error: assocError } = await supabase
+        .from('users_tenants')
+        .update({ unit_id: finalUnitId })
+        .eq('user_id', profileId)
+        .eq('tenant_id', activeTenant.id);
+
+      if (assocError) throw assocError;
+
+      fetchStaff();
+    } catch (err: any) {
+      console.error('Erro ao vincular unidade ao membro da equipe:', err);
+      alert('Erro ao vincular unidade: ' + err.message);
+    }
+  };
+
   const generateInviteLink = () => {
     if (!activeTenant) return;
-    const link = `${window.location.origin}?invite_tenant_id=${activeTenant.id}&role=${inviteRole}&tenant_name=${encodeURIComponent(activeTenant.nome_clinica)}`;
+    let link = `${window.location.origin}?invite_tenant_id=${activeTenant.id}&role=${inviteRole}&tenant_name=${encodeURIComponent(activeTenant.nome_clinica)}`;
+    if (inviteUnitId) {
+      link += `&unit_id=${inviteUnitId}`;
+    }
     setInviteLink(link);
     setCopiedLink(false);
   };
@@ -600,6 +640,72 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
     } catch (err: any) {
       console.error('Erro ao cadastrar unidade:', err);
       alert('Erro ao cadastrar: ' + err.message);
+    }
+  };
+
+  const handleStartEditUnit = (unit: Unit) => {
+    setEditingUnitId(unit.id);
+    setEditingUnitName(unit.name);
+    setEditingUnitAddress(unit.address);
+  };
+
+  const handleCancelEditUnit = () => {
+    setEditingUnitId(null);
+    setEditingUnitName('');
+    setEditingUnitAddress('');
+  };
+
+  const handleSaveEditUnit = async (unitId: string) => {
+    if (!editingUnitName.trim()) {
+      alert('Nome da unidade é obrigatório.');
+      return;
+    }
+    try {
+      setSavingUnitEdit(true);
+      const { error } = await supabase
+        .from('units')
+        .update({
+          name: editingUnitName.trim(),
+          address: editingUnitAddress.trim()
+        })
+        .eq('id', unitId);
+
+      if (error) throw error;
+
+      setEditingUnitId(null);
+      fetchUnits();
+      alert('Unidade atualizada com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao atualizar unidade:', err);
+      alert('Erro ao atualizar unidade: ' + err.message);
+    } finally {
+      setSavingUnitEdit(false);
+    }
+  };
+
+  const handleDeleteUnit = async (unitId: string, unitName: string) => {
+    if (!confirm(`Deseja realmente excluir a unidade "${unitName}"?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('units')
+        .delete()
+        .eq('id', unitId);
+
+      if (error) {
+        if (error.code === '23503') {
+          alert('Não é possível excluir esta unidade pois existem dados vinculados a ela (ex: atendimentos, estoque, ou profissionais).');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      fetchUnits();
+      alert('Unidade excluída com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao excluir unidade:', err);
+      alert('Erro ao excluir unidade: ' + err.message);
     }
   };
 
@@ -1003,17 +1109,125 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>
             <Building size={20} style={{ color: 'hsl(var(--primary))' }} />
-            Unidades de Atendimento
+            Unidades de Atendimento ({units.length})
           </h2>
           <div className={styles.list}>
-            {units.map(unit => (
-              <div key={unit.id} className={styles.listItem}>
-                <div className={styles.itemInfo}>
-                  <span className={styles.itemName}>{unit.name}</span>
-                  <span className={styles.itemDesc}>{unit.address}</span>
+            {units.map(unit => {
+              const isEditing = editingUnitId === unit.id;
+              return (
+                <div key={unit.id} className={styles.listItem} style={{ flexDirection: isEditing ? 'column' : 'row', alignItems: isEditing ? 'stretch' : 'center', gap: isEditing ? '12px' : '8px' }}>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={editingUnitName}
+                        onChange={(e) => setEditingUnitName(e.target.value)}
+                        placeholder="Nome da Unidade"
+                        style={{ fontSize: '13px' }}
+                      />
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={editingUnitAddress}
+                        onChange={(e) => setEditingUnitAddress(e.target.value)}
+                        placeholder="Endereço da Unidade"
+                        style={{ fontSize: '13px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditUnit(unit.id)}
+                          disabled={savingUnitEdit}
+                          style={{
+                            background: 'hsl(var(--primary))',
+                            color: 'white',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Check size={14} />
+                          <span>{savingUnitEdit ? 'Salvando...' : 'Salvar'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEditUnit}
+                          disabled={savingUnitEdit}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid hsl(var(--border-color))',
+                            color: 'hsl(var(--text-muted))',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <X size={14} />
+                          <span>Cancelar</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={styles.itemInfo}>
+                        <span className={styles.itemName}>{unit.name}</span>
+                        <span className={styles.itemDesc}>{unit.address}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditUnit(unit)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid hsl(var(--border-color))',
+                            color: 'hsl(var(--text-main))',
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'var(--transition-fast)'
+                          }}
+                          title="Editar Unidade"
+                        >
+                          <Edit2 size={14} />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUnit(unit.id, unit.name)}
+                          className={styles.removeBtn}
+                          style={{
+                            padding: '6px 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Excluir Unidade"
+                        >
+                          <Trash2 size={14} />
+                          <span>Excluir</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <form className={styles.form} onSubmit={handleAddUnit} style={{ marginTop: '24px', borderTop: '1px solid hsl(var(--border-color))', paddingTop: '16px' }}>
@@ -1125,25 +1339,54 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
             Membros da Equipe ({staff.length})
           </h2>
           
-          <div className={styles.list} style={{ maxHeight: '220px', overflowY: 'auto' }}>
+          <div className={styles.list} style={{ maxHeight: '320px', overflowY: 'auto' }}>
             {staff.length > 0 ? (
               staff.map(member => (
-                <div key={member.id} className={styles.listItem}>
-                  <div className={styles.itemInfo}>
-                    <span className={styles.itemName}>{member.name}</span>
-                    <span className={styles.itemDesc}>
-                      {member.email} | {member.role === 'admin' ? 'Administrador' : member.role === 'dentist' ? 'Dentista' : member.role === 'receptionist' ? 'Recepção' : member.role === 'finance' ? 'Financeiro' : member.role}
-                    </span>
+                <div key={member.id} className={styles.listItem} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className={styles.itemInfo}>
+                      <span className={styles.itemName}>{member.name}</span>
+                      <span className={styles.itemDesc}>
+                        {member.email} | {member.role === 'admin' ? 'Administrador' : member.role === 'dentist' ? 'Dentista' : member.role === 'receptionist' ? 'Recepção' : member.role === 'finance' ? 'Financeiro' : member.role}
+                      </span>
+                    </div>
+                    {member.role !== 'admin' && (
+                      <button 
+                        onClick={() => handleRemoveStaff(member.id)}
+                        className={styles.removeBtn}
+                        title="Remover membro"
+                      >
+                        Remover
+                      </button>
+                    )}
                   </div>
-                  {member.role !== 'admin' && (
-                    <button 
-                      onClick={() => handleRemoveStaff(member.id)}
-                      className={styles.removeBtn}
-                      title="Remover membro"
+                  
+                  {/* Seletor de Unidade Vinculada */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '6px', border: '1px solid hsl(var(--border-color))' }}>
+                    <Building size={14} style={{ color: 'hsl(var(--primary))', flexShrink: 0 }} />
+                    <span style={{ fontSize: '11px', color: 'hsl(var(--text-muted))', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      Unidade de Atendimento:
+                    </span>
+                    <select
+                      value={member.unit_id || ''}
+                      onChange={(e) => handleUpdateStaffUnit(member.id, e.target.value)}
+                      className={styles.input}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        background: 'hsl(var(--bg-app))',
+                        color: 'hsl(var(--text-main))',
+                        width: '100%',
+                        cursor: 'pointer'
+                      }}
                     >
-                      Remover
-                    </button>
-                  )}
+                      <option value="">Todas as Unidades (Acesso Global)</option>
+                      {units.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               ))
             ) : (
@@ -1154,21 +1397,41 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
           <div style={{ marginTop: '12px', borderTop: '1px dashed hsl(var(--border-color))', paddingTop: '16px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '12px' }}>Convidar Novo Profissional</h3>
             
-            <div className={styles.formGroup} style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'hsl(var(--text-muted))', marginBottom: '6px', display: 'block' }}>Função do Convidado</label>
-              <select 
-                value={inviteRole} 
-                onChange={(e) => {
-                  setInviteRole(e.target.value as any);
-                  setInviteLink('');
-                }}
-                className={styles.input}
-                style={{ background: 'hsl(var(--bg-app))', color: 'white', width: '100%', cursor: 'pointer' }}
-              >
-                <option value="dentist">Dentista</option>
-                <option value="receptionist">Recepção</option>
-                <option value="finance">Financeiro</option>
-              </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+              <div className={styles.formGroup}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'hsl(var(--text-muted))' }}>Função do Convidado</label>
+                <select 
+                  value={inviteRole} 
+                  onChange={(e) => {
+                    setInviteRole(e.target.value as any);
+                    setInviteLink('');
+                  }}
+                  className={styles.input}
+                  style={{ background: 'hsl(var(--bg-app))', color: 'white', width: '100%', cursor: 'pointer' }}
+                >
+                  <option value="dentist">Dentista</option>
+                  <option value="receptionist">Recepção</option>
+                  <option value="finance">Financeiro</option>
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'hsl(var(--text-muted))' }}>Unidade Padrão do Convidado</label>
+                <select 
+                  value={inviteUnitId} 
+                  onChange={(e) => {
+                    setInviteUnitId(e.target.value);
+                    setInviteLink('');
+                  }}
+                  className={styles.input}
+                  style={{ background: 'hsl(var(--bg-app))', color: 'white', width: '100%', cursor: 'pointer' }}
+                >
+                  <option value="">Todas as Unidades (Acesso Global)</option>
+                  {units.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <button 

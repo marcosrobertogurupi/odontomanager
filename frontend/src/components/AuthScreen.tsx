@@ -18,17 +18,20 @@ export const AuthScreen: React.FC = () => {
   const [inviteTenantId, setInviteTenantId] = useState<string | null>(null);
   const [inviteRole, setInviteRole] = useState<string | null>(null);
   const [inviteTenantName, setInviteTenantName] = useState<string | null>(null);
+  const [inviteUnitId, setInviteUnitId] = useState<string | null>(null);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tenantId = params.get('invite_tenant_id');
     const roleParam = params.get('role');
     const tenantName = params.get('tenant_name');
+    const unitIdParam = params.get('unit_id');
 
     if (tenantId && roleParam) {
       setInviteTenantId(tenantId);
       setInviteRole(roleParam);
       setInviteTenantName(tenantName || 'Clínica Convidada');
+      setInviteUnitId(unitIdParam || null);
       setIsSignUp(true); // Redireciona para o cadastro
     }
   }, []);
@@ -51,6 +54,7 @@ export const AuthScreen: React.FC = () => {
               role: inviteRole || 'clinic_owner',
               company_name: inviteRole ? undefined : companyName,
               invited_tenant_id: inviteTenantId || undefined,
+              invited_unit_id: inviteUnitId || undefined,
               phone,
             },
           },
