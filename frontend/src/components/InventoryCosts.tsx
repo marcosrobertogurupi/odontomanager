@@ -22,7 +22,8 @@ import {
   Sliders,
   DollarSign as MoneyIcon,
   X,
-  ShieldAlert
+  ShieldAlert,
+  RotateCcw
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
@@ -84,6 +85,12 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   const [isNewCompraOpen, setIsNewCompraOpen] = useState(false);
   const [isNewCustoOpen, setIsNewCustoOpen] = useState(false);
   const [isAjusteManualOpen, setIsAjusteManualOpen] = useState(false);
+
+  // Modal Zerar/Reiniciar Estoque
+  const [isZerarEstoqueOpen, setIsZerarEstoqueOpen] = useState(false);
+  const [zerarMode, setZerarMode] = useState<'zerar_saldos' | 'apagar_tudo'>('apagar_tudo');
+  const [zerarConfirmInput, setZerarConfirmInput] = useState('');
+  const [isZerando, setIsZerando] = useState(false);
 
   // Unidades de Medida
   const [unidadesMedida, setUnidadesMedida] = useState<any[]>([]);
@@ -644,13 +651,13 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
         .select('*, insumo:insumos(*)')
         .eq('procedure_id', procId)
         .eq('tenant_id', activeTenant.id);
-      if (bomErr) throw bomErr;
+      if (bomErr) console.warn('Erro ao carregar BOM:', bomErr);
 
       setBomItems((bom || []).map(b => ({
         id: b.id,
         insumo_id: b.insumo_id,
-        quantidade_usada_por_procedimento: Number(b.quantidade_usada_por_procedimento),
-        numero_consultas_necessarias: Number(b.numero_consultas_necessarias),
+        quantidade_usada_por_procedimento: Number(b.quantidade_usada_por_procedimento || 0),
+        numero_consultas_necessarias: Number(b.numero_consultas_necessarias || 1),
         insumo: b.insumo
       })));
 
@@ -661,28 +668,28 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
         .eq('procedure_id', procId)
         .eq('tenant_id', activeTenant.id)
         .maybeSingle();
-      if (calcErr) throw calcErr;
+      if (calcErr) console.warn('Erro ao carregar custos do procedimento:', calcErr);
 
       // Preço praticado atual do procedimento
       const { data: proc, error: procErr } = await supabase
         .from('procedures')
-        .select('preco_praticado')
+        .select('preco_praticado, price')
         .eq('id', procId)
         .eq('tenant_id', activeTenant.id)
-        .single();
-      if (procErr) throw procErr;
-      setPrecoPraticado(Number(proc?.preco_praticado || 0));
+        .maybeSingle();
+      if (procErr) console.warn('Erro ao carregar preço praticado do procedimento:', procErr);
+      setPrecoPraticado(Number(proc?.preco_praticado ?? proc?.price ?? 0));
 
       if (calc) {
-        setCustoMaterialEspecial(Number(calc.custo_material_especial));
-        setCustoTerceirosLaboratorio(Number(calc.custo_terceiros_laboratorio));
-        setTempoConsultaMinutos(Number(calc.tempo_consulta_minutos));
-        setNumeroSessoesTotal(Number(calc.numero_sessoes_total));
-        setComissaoProfissionalPct(Number(calc.comissao_professional_pct));
-        setTaxaCartaoPct(Number(calc.taxa_cartao_pct));
-        setImpostosPct(Number(calc.impostos_pct));
-        setMargemLucroDesejadaPct(Number(calc.margem_lucro_desejada_pct));
-        setOutrasDeducoesPct(Number(calc.outras_deducoes_pct));
+        setCustoMaterialEspecial(Number(calc.custo_material_especial || 0));
+        setCustoTerceirosLaboratorio(Number(calc.custo_terceiros_laboratorio || 0));
+        setTempoConsultaMinutos(Number(calc.tempo_consulta_minutos || 30));
+        setNumeroSessoesTotal(Number(calc.numero_sessoes_total || 1));
+        setComissaoProfissionalPct(Number(calc.comissao_profissional_pct ?? calc.comissao_professional_pct ?? 0));
+        setTaxaCartaoPct(Number(calc.taxa_cartao_pct || 0));
+        setImpostosPct(Number(calc.impostos_pct || 0));
+        setMargemLucroDesejadaPct(Number(calc.margem_lucro_desejada_pct || 0));
+        setOutrasDeducoesPct(Number(calc.outras_deducoes_pct || 0));
       } else {
         resetCalculatorParams();
       }
@@ -898,16 +905,61 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   };
 
   const handleDeleteInsumo = async (id: string) => {
+    if (!activeTenant) return;
     if (!confirm('Deseja realmente excluir este insumo? Isso removerá o item do catálogo, todos os saldos de estoque e fichas técnicas associados.')) return;
     try {
-      const { error } = await supabase
-        .from('insumos')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      fetchInsumosAndEstoque();
+      const { error: rpcErr } = await supabase.rpc('deletar_insumo_completo', {
+        p_insumo_id: id,
+        p_tenant_id: activeTenant.id
+      });
+
+      if (rpcErr) {
+        console.warn('RPC deletar_insumo_completo falhou, tentando exclusão direta:', rpcErr);
+        const { error: directErr } = await supabase
+          .from('insumos')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', activeTenant.id);
+        if (directErr) throw directErr;
+      }
+
+      await fetchInsumosAndEstoque();
     } catch (err: any) {
-      alert('Erro ao excluir insumo: ' + err.message);
+      console.error('Erro ao excluir insumo:', err);
+      alert('Erro ao excluir insumo: ' + (err.message || err));
+    }
+  };
+
+  const handleZerarEstoqueSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant) return;
+    if (zerarConfirmInput.trim().toUpperCase() !== 'ZERAR') {
+      alert('Por favor, digite a palavra ZERAR em maiúsculas para confirmar.');
+      return;
+    }
+
+    setIsZerando(true);
+    try {
+      const { error } = await supabase.rpc('zerar_estoque_completo', {
+        p_tenant_id: activeTenant.id,
+        p_mode: zerarMode
+      });
+
+      if (error) throw error;
+
+      alert(
+        zerarMode === 'apagar_tudo'
+          ? 'Estoque e catálogo de materiais zerados com sucesso! Você já pode cadastrar seus materiais do zero.'
+          : 'Saldos de estoque redefinidos para 0,00 com sucesso!'
+      );
+      setIsZerarEstoqueOpen(false);
+      setZerarConfirmInput('');
+      await fetchAll();
+    } catch (err: any) {
+      console.error('Erro ao zerar estoque:', err);
+      alert('Erro ao processar ação no estoque: ' + (err.message || err));
+    } finally {
+      setIsZerando(false);
     }
   };
 
@@ -1010,7 +1062,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
           custo_terceiros_laboratorio: custoTerceirosLaboratorio,
           tempo_consulta_minutos: tempoConsultaMinutos,
           numero_sessoes_total: numeroSessoesTotal,
-          comissao_professional_pct: comissaoProfissionalPct,
+          comissao_profissional_pct: comissaoProfissionalPct,
           taxa_cartao_pct: taxaCartaoPct,
           impostos_pct: impostosPct,
           margem_lucro_desejada_pct: margemLucroDesejadaPct,
@@ -1091,38 +1143,52 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   // FÓRMULAS DE CÁLCULO E LÓGICA DE NEGÓCIO (EM TEMPO REAL)
   // =========================================================================
 
-  // 1. Custo Hora Clínica
-  const totalCustosFixosMensais = custosFixos
-    .filter(cf => cf.ativo)
-    .reduce((acc, curr) => {
-      const val = Number(curr.valor_mensal);
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
+  // Helper de número seguro
+  const safeNum = (val: any, fallback = 0) => {
+    const n = Number(val);
+    return isNaN(n) || !isFinite(n) ? fallback : n;
+  };
 
-  const calculatedCustoHoraClinica = horasOcupadasMes > 0 
-    ? totalCustosFixosMensais / horasOcupadasMes 
+  // 1. Custo Hora Clínica
+  const totalCustosFixosMensais = (custosFixos || [])
+    .filter(cf => cf && cf.ativo)
+    .reduce((acc, curr) => acc + safeNum(curr.valor_mensal, 0), 0);
+
+  const calculatedCustoHoraClinica = safeNum(horasOcupadasMes, 0) > 0 
+    ? totalCustosFixosMensais / safeNum(horasOcupadasMes, 120) 
     : 0;
 
   // 2. Custo de Insumos da BOM
-  const calculatedCustoMaterialGeral = bomItems.reduce((acc, b) => {
-    if (!b.insumo_id || !b.insumo) return acc;
-    const preco = Number(b.insumo.preco_embalagem_atual || 0);
-    const rendimento = Number(b.insumo.quantidade_rendimento || 1);
-    const qtyUsada = Number(b.quantidade_usada_por_procedimento || 0);
-    const sessoesNecessarias = Number(b.numero_consultas_necessarias || 1);
+  const calculatedCustoMaterialGeral = (bomItems || []).reduce((acc, b) => {
+    if (!b || !b.insumo_id || !b.insumo) return acc;
+    const preco = safeNum(b.insumo.preco_embalagem_atual, 0);
+    const rendimento = safeNum(b.insumo.quantidade_rendimento, 1);
+    const qtyUsada = safeNum(b.quantidade_usada_por_procedimento, 0);
+    const sessoesNecessarias = safeNum(b.numero_consultas_necessarias, 1);
 
     const valorPorConsulta = rendimento > 0 ? (preco / rendimento) * qtyUsada : 0;
     return acc + (valorPorConsulta * sessoesNecessarias);
   }, 0);
 
   // 3. Calculadora de Procedimento
-  const custoPorConsultaTempo = (tempoConsultaMinutos / 60) * calculatedCustoHoraClinica;
-  const custoFixoProcedimento = calculatedCustoMaterialGeral + custoMaterialEspecial + custoTerceirosLaboratorio;
-  const custoTotalProcedimento = (custoPorConsultaTempo * numeroSessoesTotal) + custoFixoProcedimento;
+  const safeTempoMinutos = safeNum(tempoConsultaMinutos, 0);
+  const safeSessoes = safeNum(numeroSessoesTotal, 1);
+  const safeMatEspecial = safeNum(custoMaterialEspecial, 0);
+  const safeTerceirosLab = safeNum(custoTerceirosLaboratorio, 0);
 
-  const totalDeducoesPct = comissaoProfissionalPct + taxaCartaoPct + impostosPct + margemLucroDesejadaPct + outrasDeducoesPct;
+  const custoPorConsultaTempo = (safeTempoMinutos / 60) * calculatedCustoHoraClinica;
+  const custoFixoProcedimento = calculatedCustoMaterialGeral + safeMatEspecial + safeTerceirosLab;
+  const custoTotalProcedimento = (custoPorConsultaTempo * safeSessoes) + custoFixoProcedimento;
+
+  const safeComissao = safeNum(comissaoProfissionalPct, 0);
+  const safeTaxaCartao = safeNum(taxaCartaoPct, 0);
+  const safeImpostos = safeNum(impostosPct, 0);
+  const safeMargem = safeNum(margemLucroDesejadaPct, 0);
+  const safeOutras = safeNum(outrasDeducoesPct, 0);
+
+  const totalDeducoesPct = safeComissao + safeTaxaCartao + safeImpostos + safeMargem + safeOutras;
   
-  const markupDivisor = totalDeducoesPct < 100 
+  const markupDivisor = (totalDeducoesPct < 100 && totalDeducoesPct >= 0) 
     ? 1 / (1 - (totalDeducoesPct / 100)) 
     : null;
 
@@ -1253,6 +1319,15 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                 </button>
                 {isAdmin && (
                   <>
+                    <button 
+                      onClick={() => setIsZerarEstoqueOpen(true)} 
+                      className={styles.removeBtn} 
+                      style={{ padding: '8px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      title="Zerar ou Reiniciar Estoque para Começar do Zero"
+                    >
+                      <RotateCcw size={14} />
+                      Zerar Estoque
+                    </button>
                     <button onClick={() => setIsAjusteManualOpen(true)} className={styles.secondaryBtn}>
                       Ajuste Manual
                     </button>
@@ -1730,7 +1805,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
 
                         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: '6px', fontSize: '12px', textAlign: 'right' }}>
                           <span style={{ color: 'hsl(var(--text-muted))' }}>Custo Total</span>
-                          <strong style={{ fontSize: '13px', color: 'hsl(var(--text-main))' }}>R$ {totalRowCost.toFixed(2)}</strong>
+                          <strong style={{ fontSize: '13px', color: 'hsl(var(--text-main))' }}>R$ {(Number(totalRowCost) || 0).toFixed(2)}</strong>
                         </div>
                       </div>
                     );
@@ -1745,7 +1820,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'hsl(var(--bg-app))', padding: '16px', borderRadius: '12px', marginTop: '24px', border: '1px solid hsl(var(--border-color))' }}>
                   <span style={{ fontWeight: 600, fontSize: '14px' }}>Custo Total de Insumos (BOM)</span>
                   <strong style={{ fontSize: '18px', color: 'hsl(var(--primary))' }}>
-                    R$ {calculatedCustoMaterialGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R$ {(Number(calculatedCustoMaterialGeral) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </strong>
                 </div>
               </div>
@@ -1852,19 +1927,19 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '12px 0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                       <span style={{ color: 'hsl(var(--text-muted))' }}>Custo por Sessão (Tempo Cadeira)</span>
-                      <span>R$ {custoPorConsultaTempo.toFixed(2)}</span>
+                      <span>R$ {(Number(custoPorConsultaTempo) || 0).toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                       <span style={{ color: 'hsl(var(--text-muted))' }}>Custo Fixo do Procedimento</span>
-                      <span>R$ {custoFixoProcedimento.toFixed(2)}</span>
+                      <span>R$ {(Number(custoFixoProcedimento) || 0).toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
                       <span style={{ color: 'hsl(var(--text-main))' }}>Custo Total do Procedimento</span>
-                      <span>R$ {custoTotalProcedimento.toFixed(2)}</span>
+                      <span>R$ {(Number(custoTotalProcedimento) || 0).toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                       <span style={{ color: 'hsl(var(--text-muted))' }}>Markup Divisor</span>
-                      <span>{markupDivisor ? markupDivisor.toFixed(4) : 'Inválido'}</span>
+                      <span>{markupDivisor ? (Number(markupDivisor) || 0).toFixed(4) : 'Inválido'}</span>
                     </div>
                   </div>
 
@@ -1883,12 +1958,12 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                       <div>
                         <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>Valor Sugerido de Venda</span>
                         <h3 style={{ fontSize: '22px', fontWeight: 800, color: 'hsl(var(--success))' }}>
-                          R$ {valorSugeridoCobranca.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          R$ {(Number(valorSugeridoCobranca) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </h3>
                       </div>
                       {isAdmin && (
                         <button 
-                          onClick={() => setPrecoPraticado(Number(valorSugeridoCobranca.toFixed(2)))} 
+                          onClick={() => setPrecoPraticado(Number((Number(valorSugeridoCobranca) || 0).toFixed(2)))} 
                           className={styles.secondaryBtn}
                           style={{ padding: '6px 12px', fontSize: '12px' }}
                         >
@@ -2435,6 +2510,101 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* =========================================================================
+          MODAL: ZERAR / REINICIAR ESTOQUE (COMEÇAR DO ZERO)
+          ========================================================================= */}
+      <div className={`${styles.overlay} ${isZerarEstoqueOpen ? styles.overlayActive : ''}`} onClick={() => setIsZerarEstoqueOpen(false)} />
+      <div className={`${styles.drawer} ${isZerarEstoqueOpen ? styles.drawerActive : ''}`} style={{ maxWidth: '500px' }}>
+        <div className={styles.drawerHeader}>
+          <h3 className={styles.drawerTitle} style={{ color: 'hsl(var(--danger))', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={20} />
+            Zerar ou Reiniciar Estoque
+          </h3>
+          <button className={styles.closeBtn} onClick={() => setIsZerarEstoqueOpen(false)}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form className={styles.form} onSubmit={handleZerarEstoqueSubmit}>
+          <div className={styles.alertBox} style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)', color: 'hsl(var(--danger))' }}>
+            <AlertTriangle size={20} />
+            <div>
+              <strong>Atenção: Ação irreversível!</strong>
+              <p>Escolha como deseja resetar o controle de materiais da clínica:</p>
+            </div>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label style={{ fontWeight: 600, marginBottom: '8px' }}>Modo de Reinício:</label>
+            
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', padding: '10px', border: '1px solid hsl(var(--border-color))', borderRadius: '8px', marginBottom: '8px' }}>
+              <input 
+                type="radio" 
+                name="zerarMode" 
+                value="apagar_tudo"
+                checked={zerarMode === 'apagar_tudo'}
+                onChange={() => setZerarMode('apagar_tudo')}
+                style={{ marginTop: '3px' }}
+              />
+              <div>
+                <strong style={{ color: 'hsl(var(--danger))' }}>Apagar tudo e começar do zero (Recomendado)</strong>
+                <p style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', margin: '2px 0 0 0' }}>
+                  Exclui todos os materiais de teste, compras e histórico para você cadastrar os materiais reais da clínica do zero.
+                </p>
+              </div>
+            </label>
+
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', padding: '10px', border: '1px solid hsl(var(--border-color))', borderRadius: '8px' }}>
+              <input 
+                type="radio" 
+                name="zerarMode" 
+                value="zerar_saldos"
+                checked={zerarMode === 'zerar_saldos'}
+                onChange={() => setZerarMode('zerar_saldos')}
+                style={{ marginTop: '3px' }}
+              />
+              <div>
+                <strong>Manter materiais e zerar saldos</strong>
+                <p style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', margin: '2px 0 0 0' }}>
+                  Mantém a lista de materiais cadastrados, mas redefine todas as quantidades em estoque para 0,00.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Para confirmar, digite <strong>ZERAR</strong> abaixo:</label>
+            <input 
+              type="text" 
+              className={styles.input}
+              placeholder="Digite ZERAR para confirmar"
+              value={zerarConfirmInput}
+              onChange={(e) => setZerarConfirmInput(e.target.value)}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+            <button 
+              type="button" 
+              className={styles.secondaryBtn} 
+              onClick={() => setIsZerarEstoqueOpen(false)}
+              style={{ flex: 1 }}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className={styles.removeBtn} 
+              disabled={isZerando || zerarConfirmInput.trim().toUpperCase() !== 'ZERAR'}
+              style={{ flex: 1, padding: '10px', justifyContent: 'center' }}
+            >
+              {isZerando ? 'Processando...' : 'Confirmar e Resetar'}
+            </button>
+          </div>
+        </form>
       </div>
 
     </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabaseClient';
 import {
   ALL_TEMPLATES, TEMPLATES_BY_CATEGORY, CATEGORY_LABELS,
-  DocumentTemplate, DocumentField, suggestTcleByProcedure
+  type DocumentTemplate, type DocumentField, suggestTcleByProcedure
 } from '../lib/documentTemplates';
 import styles from './Papelaria.module.css';
 import {

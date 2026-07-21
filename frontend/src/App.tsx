@@ -10,6 +10,7 @@ import Financial from './components/Financial';
 import AdminSettings from './components/AdminSettings';
 import InventoryCosts from './components/InventoryCosts';
 import Papelaria from './components/Papelaria';
+import ErrorBoundary from './components/ErrorBoundary';
 import { TenantProvider, useTenant } from './contexts/TenantContext';
 import { AuthScreen } from './components/AuthScreen';
 import { supabase } from './lib/supabaseClient';
@@ -255,7 +256,9 @@ function AppContent() {
           }}
         >
           <div className="fade-in-up">
-            {renderContent()}
+            <ErrorBoundary>
+              {renderContent()}
+            </ErrorBoundary>
           </div>
         </main>
       </div>
