@@ -15,7 +15,9 @@ import {
   Sparkles,
   Smartphone,
   Loader,
-  KeyRound
+  KeyRound,
+  BellRing,
+  Megaphone
 } from 'lucide-react';
 import styles from './AdminSettings.module.css';
 import { useTenant } from '../contexts/TenantContext';
@@ -25,6 +27,17 @@ interface Unit {
   id: string;
   name: string;
   address: string;
+}
+
+interface AnnouncementItem {
+  id: string;
+  title: string;
+  body: string;
+  tag: string;
+  tag_type: 'urgent' | 'new' | 'general';
+  unit_id: string | null;
+  created_at: string;
+  is_system?: boolean;
 }
 
 interface Procedure {
@@ -96,6 +109,88 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   // Nova Unidade
   const [unitName, setUnitName] = useState('');
   const [unitAddress, setUnitAddress] = useState('');
+
+  // Gerenciador de Avisos e Comunicados
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [announcementCategory, setAnnouncementCategory] = useState<'urgent' | 'new' | 'general'>('general');
+  const [announcementUnitId, setAnnouncementUnitId] = useState('');
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false);
+
+  const fetchAnnouncements = async () => {
+    if (!activeTenant) return;
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('tenant_id', activeTenant.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAnnouncements(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar avisos:', err);
+    }
+  };
+
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTenant) return;
+    if (!announcementTitle.trim() || !announcementBody.trim()) {
+      alert('Por favor, preencha o título e o conteúdo do aviso.');
+      return;
+    }
+
+    try {
+      setSavingAnnouncement(true);
+      let tagText = 'Geral';
+      if (announcementCategory === 'urgent') tagText = 'Urgente';
+      if (announcementCategory === 'new') tagText = 'Novidade';
+
+      const { error } = await supabase
+        .from('announcements')
+        .insert({
+          tenant_id: activeTenant.id,
+          unit_id: announcementUnitId || null,
+          tag: tagText,
+          tag_type: announcementCategory,
+          title: announcementTitle.trim(),
+          body: announcementBody.trim(),
+          is_system: false
+        });
+
+      if (error) throw error;
+
+      setAnnouncementTitle('');
+      setAnnouncementBody('');
+      setAnnouncementCategory('general');
+      setAnnouncementUnitId('');
+      fetchAnnouncements();
+      alert('Aviso publicado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao publicar aviso:', err);
+      alert('Erro ao publicar aviso: ' + err.message);
+    } finally {
+      setSavingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este aviso/comunicado?')) return;
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      fetchAnnouncements();
+    } catch (err: any) {
+      console.error('Erro ao excluir aviso:', err);
+      alert('Erro ao excluir aviso: ' + err.message);
+    }
+  };
 
   // Membros da Equipe
   const [staff, setStaff] = useState<any[]>([]);
@@ -432,6 +527,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
       fetchProcedures();
       fetchStaff();
       fetchIntegrations();
+      fetchAnnouncements();
     }
     if (role === 'super_admin') {
       fetchAllTenants();
@@ -1341,6 +1437,195 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
               <span>{savingPassword ? 'Alterando...' : 'Alterar Senha'}</span>
             </button>
           </form>
+        </div>
+
+        {/* Card Gerenciador de Avisos e Comunicados */}
+        <div className={styles.card} style={{ gridColumn: '1 / -1' }}>
+          <h2 className={styles.cardTitle}>
+            <BellRing size={20} style={{ color: 'hsl(var(--primary))' }} />
+            Gerenciador de Avisos e Comunicados
+          </h2>
+          <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', lineHeight: '1.5', marginBottom: '16px' }}>
+            Publique avisos importantes para a equipe ou para unidades específicas da clínica. Eles serão exibidos no Dashboard dos usuários.
+          </p>
+
+          {/* Formulário de Novo Aviso */}
+          <form onSubmit={handleCreateAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: '14px', background: 'rgba(255, 255, 255, 0.02)', padding: '20px', borderRadius: '12px', border: '1px solid hsl(var(--border-color))' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--text-main))', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <Megaphone size={16} style={{ color: 'hsl(var(--primary))' }} />
+              Publicar Novo Comunicado
+            </h3>
+
+            <div className={styles.formRow}>
+              <div className={styles.formGroup}>
+                <label>Título do Aviso *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="Ex: Reunião de alinhamento ou lembrete importante"
+                  required
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Categoria / Etiqueta *</label>
+                <select
+                  className={styles.input}
+                  value={announcementCategory}
+                  onChange={(e) => setAnnouncementCategory(e.target.value as any)}
+                >
+                  <option value="general">Geral (Verde)</option>
+                  <option value="urgent">Urgente (Vermelho)</option>
+                  <option value="new">Novidade (Azul)</option>
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Unidade Alvo</label>
+                <select
+                  className={styles.input}
+                  value={announcementUnitId}
+                  onChange={(e) => setAnnouncementUnitId(e.target.value)}
+                >
+                  <option value="">Todas as Unidades</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Mensagem do Comunicado *</label>
+              <textarea
+                className={styles.input}
+                style={{ minHeight: '80px', resize: 'vertical' }}
+                value={announcementBody}
+                onChange={(e) => setAnnouncementBody(e.target.value)}
+                placeholder="Escreva a mensagem completa que será exibida no painel de avisos..."
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="submit"
+                className={styles.actionBtn}
+                disabled={savingAnnouncement}
+                style={{ padding: '8px 20px' }}
+              >
+                {savingAnnouncement ? (
+                  <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                ) : (
+                  <Plus size={16} />
+                )}
+                <span>{savingAnnouncement ? 'Publicando...' : 'Publicar Aviso'}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Lista de Avisos Existentes */}
+          <div style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--text-main))', marginBottom: '12px' }}>
+              Avisos Publicados ({announcements.length})
+            </h3>
+
+            {announcements.length === 0 ? (
+              <p style={{ color: 'hsl(var(--text-muted))', fontSize: '13px', fontStyle: 'italic', textAlign: 'center', padding: '20px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px' }}>
+                Nenhum aviso publicado até o momento.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {announcements.map((a) => {
+                  let tagBg = 'rgba(16, 185, 129, 0.15)';
+                  let tagColor = '#10b981';
+                  if (a.tag_type === 'urgent') {
+                    tagBg = 'rgba(239, 68, 68, 0.15)';
+                    tagColor = '#ef4444';
+                  } else if (a.tag_type === 'new') {
+                    tagBg = 'rgba(59, 130, 246, 0.15)';
+                    tagColor = '#3b82f6';
+                  }
+
+                  const targetUnitName = units.find(u => u.id === a.unit_id)?.name || 'Todas as Unidades';
+
+                  return (
+                    <div
+                      key={a.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        border: '1px solid hsl(var(--border-color))',
+                        gap: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: tagBg,
+                            color: tagColor,
+                            textTransform: 'uppercase'
+                          }}>
+                            {a.tag}
+                          </span>
+
+                          {a.is_system && (
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: 'rgba(168, 85, 247, 0.15)',
+                              color: '#c084fc'
+                            }}>
+                              Sistema Autônomo
+                            </span>
+                          )}
+
+                          <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))' }}>
+                            Unidade: {targetUnitName} • {new Date(a.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                        <strong style={{ fontSize: '14px', color: 'hsl(var(--text-main))' }}>{a.title}</strong>
+                        <p style={{ fontSize: '13px', color: 'hsl(var(--text-muted))', margin: 0 }}>{a.body}</p>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteAnnouncement(a.id)}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          color: '#ef4444',
+                          border: 'none',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600
+                        }}
+                        title="Excluir Aviso"
+                      >
+                        <Trash2 size={14} />
+                        <span>Excluir</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

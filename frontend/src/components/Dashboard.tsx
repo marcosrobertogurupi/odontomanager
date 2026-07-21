@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
+import { checkAndGenerateSystemAnnouncements } from '../lib/systemAnnouncements';
 import styles from './Dashboard.module.css';
 
 interface DashboardProps {
@@ -117,7 +118,10 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
         });
         setRecentActivities(activities.slice(0, 5));
 
-        // 4. Carregar comunicados/avisos reais
+        // 4. Executar verificação e geração automática de alertas do sistema (estoque baixo, etc)
+        await checkAndGenerateSystemAnnouncements(activeTenant.id, selectedUnit);
+
+        // 5. Carregar comunicados/avisos reais
         const { data: noticesData, error: noticesError } = await supabase
           .from('announcements')
           .select('*')
@@ -305,7 +309,14 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
                   return (
                     <div key={notice.id} className={styles.noticeItem}>
                       <div className={styles.noticeHeader}>
-                        <span className={styles.noticeTag} style={tagStyle}>{notice.tag}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className={styles.noticeTag} style={tagStyle}>{notice.tag}</span>
+                          {notice.is_system && (
+                            <span style={{ fontSize: '10px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              Automático
+                            </span>
+                          )}
+                        </div>
                         <span className={styles.activityTime}>{timeLabel}</span>
                       </div>
                       <h4 className={styles.noticeTitle}>{notice.title}</h4>
