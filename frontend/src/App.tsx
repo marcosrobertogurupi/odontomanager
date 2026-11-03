@@ -11,6 +11,7 @@ import AdminSettings from './components/AdminSettings';
 import InventoryCosts from './components/InventoryCosts';
 import Papelaria from './components/Papelaria';
 import ErrorBoundary from './components/ErrorBoundary';
+import UpdateNotifier from './components/UpdateNotifier';
 import { TenantProvider, useTenant } from './contexts/TenantContext';
 import { AuthScreen } from './components/AuthScreen';
 import { supabase } from './lib/supabaseClient';
@@ -173,7 +174,7 @@ function AppContent() {
       case 'zai-chat':
         return <ZaiONe />;
       case 'patients':
-        return <Patients searchTerm={searchTerm} />;
+        return <Patients searchTerm={searchTerm} selectedUnit={units.find(u => u.id === selectedUnit)} />;
       case 'financial':
         return <Financial selectedUnit={selectedUnit} />;
       case 'inventory-costs':
@@ -257,6 +258,7 @@ export default function App() {
   return (
     <TenantProvider>
       <AppContent />
+      <UpdateNotifier />
     </TenantProvider>
   );
 }

@@ -23,6 +23,7 @@ import {
   Megaphone
 } from 'lucide-react';
 import styles from './AdminSettings.module.css';
+import { formatDate } from '../lib/formatters';
 import { useTenant } from '../contexts/TenantContext';
 import { supabase } from '../lib/supabaseClient';
 
@@ -806,7 +807,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
                       </span>
                     </td>
                     <td style={{ padding: '12px' }}>{t.limite_usuarios} usuários / {t.limite_unidades} unids</td>
-                    <td style={{ padding: '12px' }}>{new Date(t.data_inicio).toLocaleDateString('pt-BR')}</td>
+                    <td style={{ padding: '12px' }}>{formatDate(t.data_inicio)}</td>
                     <td style={{ padding: '12px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                       <button 
                         onClick={() => toggleTenantStatus(t.id, t.status_assinatura)}

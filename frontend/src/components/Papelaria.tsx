@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { formatDate as formatDateShort } from '../lib/formatters';
 import {
   ALL_TEMPLATES, TEMPLATES_BY_CATEGORY, CATEGORY_LABELS,
   type DocumentTemplate, type DocumentField, suggestTcleByProcedure
@@ -10,7 +11,7 @@ import {
   Clock, User, X, ArrowLeft, Check
 } from 'lucide-react';
 
-interface Patient {
+export interface PapelariaPatient {
   id: string;
   name: string;
   cpf?: string;
@@ -25,6 +26,8 @@ interface Patient {
   responsible_name?: string;
   weight_kg?: number;
 }
+
+type Patient = PapelariaPatient;
 
 interface Profile {
   id: string;
@@ -42,6 +45,8 @@ interface GeneratedDoc {
 
 interface PapeleriaProps {
   selectedUnit?: { id: string; name: string; address?: string; phone?: string };
+  initialPatient?: Patient | null;
+  onBack?: () => void;
 }
 
 type Step = 'select_template' | 'fill_fields' | 'preview';
@@ -64,16 +69,25 @@ const formatDate = (dateStr?: string) => {
   return `${d.getDate()} de ${d.toLocaleString('pt-BR', { month: 'long' })} de ${d.getFullYear()}`;
 };
 
-export default function Papelaria({ selectedUnit }: PapeleriaProps) {
+export default function Papelaria({ selectedUnit, initialPatient, onBack }: PapeleriaProps) {
   const [step, setStep] = useState<Step>('select_template');
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
   // Patient
-  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearch, setPatientSearch] = useState(initialPatient?.name || '');
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(initialPatient || null);
   const [patientDropdownOpen, setPatientDropdownOpen] = useState(false);
+
+  // Sync when initialPatient prop changes
+  useEffect(() => {
+    if (initialPatient) {
+      setSelectedPatient(initialPatient);
+      setPatientSearch(initialPatient.name);
+      setPatientDropdownOpen(false);
+    }
+  }, [initialPatient]);
 
   // Template
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -104,6 +118,9 @@ export default function Papelaria({ selectedUnit }: PapeleriaProps) {
   // ── Patient search ───────────────────────────────────────────
   useEffect(() => {
     if (patientSearch.length < 2) { setPatients([]); return; }
+    if (selectedPatient && patientSearch === selectedPatient.name) {
+      return;
+    }
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('patients')
@@ -114,7 +131,7 @@ export default function Papelaria({ selectedUnit }: PapeleriaProps) {
       setPatientDropdownOpen(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [patientSearch]);
+  }, [patientSearch, selectedPatient]);
 
   // ── Load doc history for selected patient ────────────────────
   useEffect(() => {
@@ -459,9 +476,16 @@ export default function Papelaria({ selectedUnit }: PapeleriaProps) {
                 <div className={styles.docPatientInfo}>
                   <div className={styles.docPatientRow}><strong>Paciente:</strong> {selectedPatient.name}</div>
                   {selectedPatient.cpf && <div className={styles.docPatientRow}><strong>CPF:</strong> {selectedPatient.cpf}</div>}
+                  {selectedPatient.rg && <div className={styles.docPatientRow}><strong>RG:</strong> {selectedPatient.rg}</div>}
+                  {selectedPatient.phone && <div className={styles.docPatientRow}><strong>Tel.:</strong> {selectedPatient.phone}</div>}
                   {selectedPatient.birth_date && (
                     <div className={styles.docPatientRow}>
-                      <strong>Nasc.:</strong> {new Date(selectedPatient.birth_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      <strong>Nasc.:</strong> {formatDateShort(selectedPatient.birth_date)}
+                    </div>
+                  )}
+                  {selectedPatient.responsible_name && (
+                    <div className={styles.docPatientRow}>
+                      <strong>Resp.:</strong> {selectedPatient.responsible_name}
                     </div>
                   )}
                 </div>
@@ -510,9 +534,14 @@ export default function Papelaria({ selectedUnit }: PapeleriaProps) {
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
+        {onBack && (
+          <button className={styles.backToPatientsBtn} onClick={onBack}>
+            <ArrowLeft size={16} /> Voltar para Pacientes
+          </button>
+        )}
         <div className={styles.headerTitle}>
           <FileText size={22} />
-          <h1>Papelaria</h1>
+          <h1>Papelaria{selectedPatient ? ` — ${selectedPatient.name}` : ''}</h1>
         </div>
         <p className={styles.headerSubtitle}>
           Gere, imprima e arquive documentos odontológicos profissionais

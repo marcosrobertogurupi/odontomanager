@@ -8,11 +8,14 @@ import {
   Star,
   Phone,
   Mail,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './Patients.module.css';
+import { formatDate } from '../lib/formatters';
+import Papelaria from './Papelaria';
 
 interface Patient {
   id: string;
@@ -21,18 +24,27 @@ interface Patient {
   phone: string;
   birth_date: string;
   cpf: string;
+  rg?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  responsible_name?: string;
+  weight_kg?: number;
   satisfaction_score: number;
 }
 
 interface PatientsProps {
   searchTerm: string;
+  selectedUnit?: { id: string; name: string; address?: string; phone?: string };
 }
 
-export default function Patients({ searchTerm }: PatientsProps) {
+export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
   const { activeTenant } = useTenant();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [papelariaPatient, setPapelariaPatient] = useState<Patient | null>(null);
 
   // Form Fields
   const [formName, setFormName] = useState('');
@@ -40,6 +52,12 @@ export default function Patients({ searchTerm }: PatientsProps) {
   const [formPhone, setFormPhone] = useState('');
   const [formBirthDate, setFormBirthDate] = useState('');
   const [formCpf, setFormCpf] = useState('');
+  const [formRg, setFormRg] = useState('');
+  const [formAddress, setFormAddress] = useState('');
+  const [formCity, setFormCity] = useState('');
+  const [formZipCode, setFormZipCode] = useState('');
+  const [formResponsibleName, setFormResponsibleName] = useState('');
+  const [formWeightKg, setFormWeightKg] = useState('');
   const [formSatisfaction, setFormSatisfaction] = useState('10.0');
 
   const fetchPatients = async () => {
@@ -76,6 +94,12 @@ export default function Patients({ searchTerm }: PatientsProps) {
     setFormPhone('');
     setFormBirthDate('');
     setFormCpf('');
+    setFormRg('');
+    setFormAddress('');
+    setFormCity('');
+    setFormZipCode('');
+    setFormResponsibleName('');
+    setFormWeightKg('');
     setFormSatisfaction('10.0');
     setIsDrawerOpen(true);
   };
@@ -87,6 +111,12 @@ export default function Patients({ searchTerm }: PatientsProps) {
     setFormPhone(p.phone || '');
     setFormBirthDate(p.birth_date || '');
     setFormCpf(p.cpf || '');
+    setFormRg(p.rg || '');
+    setFormAddress(p.address || '');
+    setFormCity(p.city || '');
+    setFormZipCode(p.zip_code || '');
+    setFormResponsibleName(p.responsible_name || '');
+    setFormWeightKg(p.weight_kg ? p.weight_kg.toString() : '');
     setFormSatisfaction(p.satisfaction_score ? p.satisfaction_score.toString() : '10.0');
     setIsDrawerOpen(true);
   };
@@ -101,6 +131,12 @@ export default function Patients({ searchTerm }: PatientsProps) {
       phone: formPhone || null,
       birth_date: formBirthDate || null,
       cpf: formCpf || null,
+      rg: formRg || null,
+      address: formAddress || null,
+      city: formCity || null,
+      zip_code: formZipCode || null,
+      responsible_name: formResponsibleName || null,
+      weight_kg: formWeightKg ? Number(formWeightKg) : null,
       satisfaction_score: Number(formSatisfaction),
       tenant_id: activeTenant.id
     };
@@ -145,6 +181,16 @@ export default function Patients({ searchTerm }: PatientsProps) {
     }
   };
 
+  if (papelariaPatient) {
+    return (
+      <Papelaria
+        selectedUnit={selectedUnit}
+        initialPatient={papelariaPatient}
+        onBack={() => setPapelariaPatient(null)}
+      />
+    );
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.titleSection}>
@@ -180,7 +226,7 @@ export default function Patients({ searchTerm }: PatientsProps) {
                   <td>{p.cpf || '-'}</td>
                   <td>{p.phone || '-'}</td>
                   <td>{p.email || '-'}</td>
-                  <td>{p.birth_date ? new Date(p.birth_date).toLocaleDateString('pt-BR') : '-'}</td>
+                  <td>{formatDate(p.birth_date)}</td>
                   <td>
                     <span className={`${styles.satisfactionBadge} ${p.satisfaction_score >= 9.0 ? styles.highScore : styles.lowScore}`}>
                       <Star size={12} fill="currentColor" />
@@ -189,6 +235,14 @@ export default function Patients({ searchTerm }: PatientsProps) {
                   </td>
                   <td>
                     <div className={styles.actionsCell}>
+                      <button
+                        onClick={() => setPapelariaPatient(p)}
+                        className={styles.btnPapelaria}
+                        title="Abrir Papelaria para este paciente"
+                      >
+                        <FileText size={15} />
+                        <span>Papelaria</span>
+                      </button>
                       <button onClick={() => handleOpenEdit(p)} className={styles.btnIcon} title="Editar paciente">
                         <Edit size={16} />
                       </button>
@@ -245,6 +299,17 @@ export default function Patients({ searchTerm }: PatientsProps) {
           </div>
 
           <div className={styles.formGroup}>
+            <label>RG</label>
+            <input 
+              type="text" 
+              className={styles.input} 
+              value={formRg}
+              onChange={(e) => setFormRg(e.target.value)}
+              placeholder="0000000" 
+            />
+          </div>
+
+          <div className={styles.formGroup}>
             <label>Telefone</label>
             <input 
               type="text" 
@@ -273,6 +338,62 @@ export default function Patients({ searchTerm }: PatientsProps) {
               className={styles.input} 
               value={formBirthDate}
               onChange={(e) => setFormBirthDate(e.target.value)}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Endereço Completo</label>
+            <input 
+              type="text" 
+              className={styles.input} 
+              value={formAddress}
+              onChange={(e) => setFormAddress(e.target.value)}
+              placeholder="Rua, Número, Bairro"
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Cidade</label>
+            <input 
+              type="text" 
+              className={styles.input} 
+              value={formCity}
+              onChange={(e) => setFormCity(e.target.value)}
+              placeholder="Ex: Gurupi"
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>CEP</label>
+            <input 
+              type="text" 
+              className={styles.input} 
+              value={formZipCode}
+              onChange={(e) => setFormZipCode(e.target.value)}
+              placeholder="00000-000"
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Responsável Legal (se menor)</label>
+            <input 
+              type="text" 
+              className={styles.input} 
+              value={formResponsibleName}
+              onChange={(e) => setFormResponsibleName(e.target.value)}
+              placeholder="Nome do responsável"
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Peso em kg (opcional)</label>
+            <input 
+              type="number" 
+              step="0.1"
+              className={styles.input} 
+              value={formWeightKg}
+              onChange={(e) => setFormWeightKg(e.target.value)}
+              placeholder="Ex: 25.5"
             />
           </div>
 

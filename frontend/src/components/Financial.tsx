@@ -12,6 +12,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './Financial.module.css';
+import { formatDate } from '../lib/formatters';
 
 interface Transaction {
   id: string;
@@ -172,7 +173,7 @@ export default function Financial({ selectedUnit }: FinancialProps) {
             {transactions.length > 0 ? (
               transactions.map(tx => (
                 <tr key={tx.id}>
-                  <td>{new Date(tx.date).toLocaleDateString('pt-BR')}</td>
+                  <td>{formatDate(tx.date)}</td>
                   <td style={{ fontWeight: '500' }}>{tx.description}</td>
                   <td>
                     <span className={`${styles.typeBadge} ${styles[tx.type]}`}>

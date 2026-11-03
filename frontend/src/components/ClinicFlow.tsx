@@ -201,21 +201,21 @@ export default function ClinicFlow() {
       const { data, error } = await supabase
         .from('procedimento_insumos')
         .select(`
-          procedimento_id,
+          procedure_id,
           insumo_id,
-          quantidade_padrao,
-          insumo:insumos(*)
+          quantidade_usada_por_procedimento,
+          insumo:insumos(nome, unidade_medida)
         `)
-        .eq('procedimento_id', procId)
-        .eq('tenant_id', activeTenant.id);
+        .eq('tenant_id', activeTenant.id)
+        .eq('procedure_id', procId);
 
       if (error) throw error;
       setCheckoutConsumos((data || []).map((item: any) => ({
         insumo_id: item.insumo_id,
         nome: item.insumo?.nome || 'Insumo',
         unidade_medida: item.insumo?.unidade_medida || 'unidade',
-        quantidade_padrao: item.quantidade_padrao,
-        quantidade_usada: item.quantidade_padrao
+        quantidade_padrao: item.quantidade_usada_por_procedimento,
+        quantidade_usada: item.quantidade_usada_por_procedimento
       })));
     } catch (err) {
       console.error('Erro ao buscar BOM:', err);

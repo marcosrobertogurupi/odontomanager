@@ -35,14 +35,54 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
       if (!activeTenant || !selectedUnit) return;
 
       try {
-        // 1. Carregar resumo financeiro
-        const { data: txs, error: txError } = await supabase
-          .from('transactions')
-          .select('type, amount')
-          .eq('tenant_id', activeTenant.id)
-          .eq('unit_id', selectedUnit);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const startOfDay = `${todayStr}T00:00:00Z`;
+        const endOfDay = `${todayStr}T23:59:59Z`;
+
+        // Executar consultas independentes em paralelo e usar Index-Only Scan / Count
+        const [
+          { data: txs, error: txError },
+          { count: apptsCount, error: appError },
+          { data: flowData, error: flowError }
+        ] = await Promise.all([
+          // 1. Carregar resumo financeiro (usa covering index idx_transactions_tenant_unit_date)
+          supabase
+            .from('transactions')
+            .select('type, amount')
+            .eq('tenant_id', activeTenant.id)
+            .eq('unit_id', selectedUnit),
+
+          // 2. Contar agendamentos de hoje sem trafegar todas as colunas/linhas
+          supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', activeTenant.id)
+            .eq('unit_id', selectedUnit)
+            .gte('start_time', startOfDay)
+            .lte('start_time', endOfDay),
+
+          // 3. Carregar fila de espera ativa e atividades recentes (limitado e com projeção enxuta)
+          supabase
+            .from('clinic_flow')
+            .select(`
+              id,
+              status,
+              checked_in_at,
+              appointment:appointments!inner(
+                id,
+                unit_id,
+                patient:patients(name)
+              )
+            `)
+            .eq('tenant_id', activeTenant.id)
+            .eq('appointment.unit_id', selectedUnit)
+            .order('checked_in_at', { ascending: false })
+            .limit(50)
+        ]);
 
         if (txError) throw txError;
+        if (appError) throw appError;
+        if (flowError) throw flowError;
 
         let income = 0;
         let expense = 0;
@@ -52,45 +92,10 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
         });
         setFinancials({ income, expense });
 
-        // 2. Carregar agendamentos de hoje
-        const todayStr = new Date().toISOString().split('T')[0];
-        const startOfDay = `${todayStr}T00:00:00Z`;
-        const endOfDay = `${todayStr}T23:59:59Z`;
-
-        const { data: appts, error: appError } = await supabase
-          .from('appointments')
-          .select('*')
-          .eq('tenant_id', activeTenant.id)
-          .eq('unit_id', selectedUnit)
-          .gte('start_time', startOfDay)
-          .lte('start_time', endOfDay);
-
-        if (appError) throw appError;
-
-        setStats(prev => ({
-          ...prev,
-          appointmentsCount: appts?.length || 0
-        }));
-
-        // 3. Carregar fila de espera ativa e atividades recentes
-        const { data: flowData, error: flowError } = await supabase
-          .from('clinic_flow')
-          .select(`
-            *,
-            appointment:appointments!inner(
-              *,
-              patient:patients(*)
-            )
-          `)
-          .eq('tenant_id', activeTenant.id)
-          .eq('appointment.unit_id', selectedUnit)
-          .order('checked_in_at', { ascending: false });
-
-        if (flowError) throw flowError;
-
         const activeFlow = (flowData || []).filter((f: any) => f.status === 'waiting' || f.status === 'checked_in');
         setStats(prev => ({
           ...prev,
+          appointmentsCount: apptsCount || 0,
           waitingRoomCount: activeFlow.length || 0
         }));
 
