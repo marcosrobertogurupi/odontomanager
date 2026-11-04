@@ -731,15 +731,13 @@ export default function PatientBudget({
       return;
     }
 
-    let targetPhone = (patient.phone || '').trim();
-    if (!targetPhone) {
-      const prompted = prompt(
-        `O paciente ${patient.name} não possui telefone cadastrado.\nInforme o número de WhatsApp com DDD para enviar o PDF:`,
-        ''
-      );
-      if (!prompted || !prompted.trim()) return;
-      targetPhone = prompted.trim();
-    }
+    const defaultPhone = (patient.phone || '').trim();
+    const promptedPhone = prompt(
+      `Confirme ou digite o número de WhatsApp (com DDD) para enviar o Orçamento em PDF de ${patient.name}:`,
+      defaultPhone
+    );
+    if (!promptedPhone || !promptedPhone.trim()) return;
+    const targetPhone = promptedPhone.trim();
 
     let cleanNumber = targetPhone.replace(/\D/g, '');
     if (cleanNumber.length === 10 || cleanNumber.length === 11) {
@@ -750,6 +748,16 @@ export default function PatientBudget({
       alert('Número de telefone inválido para envio via WhatsApp.');
       return;
     }
+
+    const formatUazapiError = (rawError: string) => {
+      if (rawError.includes('is not on WhatsApp')) {
+        return `O número informado (${targetPhone}) não possui conta ativa no WhatsApp. Verifique o número do paciente e tente novamente.`;
+      }
+      if (rawError.includes('disconnected') || rawError.includes('not connected')) {
+        return 'A instância do WhatsApp (UAZAPI) está desconectada. Verifique a conexão do WhatsApp da clínica.';
+      }
+      return rawError;
+    };
 
     setSendingWhatsApp(true);
     try {
@@ -791,6 +799,7 @@ export default function PatientBudget({
 
       const serverUrl = (integration?.uazapi_server_url || 'https://api.uazapi.com').replace(/\/$/, '');
       let sentDirectly = false;
+      let directErrorMsg = '';
 
       // 1. Tenta enviar o PDF diretamente para o endpoint /send/media da UAZAPI
       try {
@@ -813,15 +822,27 @@ export default function PatientBudget({
           sentDirectly = true;
         } else {
           const errBody = await directRes.text();
-          console.warn('Resposta UAZAPI /send/media direta:', directRes.status, errBody);
+          try {
+            const parsed = JSON.parse(errBody);
+            directErrorMsg = parsed.error || parsed.message || errBody;
+          } catch {
+            directErrorMsg = errBody;
+          }
+          // Se a API UAZAPI respondeu diretamente que o número não tem WhatsApp, não precisa repetir via Edge Function
+          if (directErrorMsg.includes('is not on WhatsApp')) {
+            throw new Error(formatUazapiError(directErrorMsg));
+          }
         }
-      } catch (directErr) {
+      } catch (directErr: any) {
+        if (directErr?.message?.includes('não possui conta ativa no WhatsApp')) {
+          throw directErr;
+        }
         console.warn('Tentativa direta UAZAPI /send/media falhou, tentando via Edge Function:', directErr);
       }
 
-      // 2. Se a chamada direta encontrou bloqueio CORS ou erro, usa a Edge Function send-message
+      // 2. Se a chamada direta encontrou bloqueio CORS/rede, usa a Edge Function send-message
       if (!sentDirectly) {
-        const { error: fnError } = await supabase.functions.invoke('send-message', {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('send-message', {
           body: {
             tenant_id: activeTenant.id,
             phone: cleanNumber,
@@ -833,7 +854,20 @@ export default function PatientBudget({
         });
 
         if (fnError) {
-          throw new Error(fnError.message || 'Falha ao enviar documento via UAZAPI.');
+          let detailedError = directErrorMsg || fnError.message || 'Falha ao enviar documento via UAZAPI.';
+          try {
+            if ((fnError as any).context && typeof (fnError as any).context.json === 'function') {
+              const errJson = await (fnError as any).context.json();
+              if (errJson?.error) detailedError = errJson.error;
+            }
+          } catch {
+            // fallback para detailedError já capturado
+          }
+          throw new Error(formatUazapiError(detailedError));
+        }
+
+        if (fnData && fnData.error) {
+          throw new Error(formatUazapiError(fnData.error));
         }
       }
 
