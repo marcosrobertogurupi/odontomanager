@@ -32,7 +32,7 @@ router.get('/', async (req, res, next) => {
 // POST /api/clinic-flow/:appointmentId/status - Atualizar status do paciente na clínica
 router.post('/:appointmentId/status', async (req, res, next) => {
   const { appointmentId } = req.params;
-  const { status, unit_id, procedure_id, consumos } = req.body; // status: checked_in, waiting, in_consultation, checked_out
+  const { status, unit_id, procedure_id, consumos, tenant_id } = req.body; // status: checked_in, waiting, in_consultation, checked_out
 
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
@@ -48,6 +48,7 @@ router.post('/:appointmentId/status', async (req, res, next) => {
           p_appointment_id: appointmentId,
           p_procedimento_id: procedure_id,
           p_unit_id: unit_id,
+          p_tenant_id: tenant_id || null,
           p_consumos: consumos
         });
         if (rpcError) throw rpcError;
@@ -56,13 +57,13 @@ router.post('/:appointmentId/status', async (req, res, next) => {
       // Atualiza status do agendamento para confirmado
       await supabase
         .from('appointments')
-        .update({ status: 'confirmed' })
+        .update({ status: 'confirmed', procedure_id: procedure_id || null })
         .eq('id', appointmentId);
     } else {
       // Se for alterado de checked_out para outro status, estorna os insumos
       const { data: currentFlow } = await supabase
         .from('clinic_flow')
-        .select('status')
+        .select('status, tenant_id')
         .eq('appointment_id', appointmentId)
         .maybeSingle();
 
@@ -70,7 +71,8 @@ router.post('/:appointmentId/status', async (req, res, next) => {
         if (!unit_id) throw new Error('unit_id is required for revert');
         const { error: revertError } = await supabase.rpc('estornar_consumo_atendimento', {
           p_appointment_id: appointmentId,
-          p_unit_id: unit_id
+          p_unit_id: unit_id,
+          p_tenant_id: tenant_id || currentFlow.tenant_id || null
         });
         if (revertError) throw revertError;
       }
@@ -89,7 +91,8 @@ router.post('/:appointmentId/status', async (req, res, next) => {
       const insertData: any = {
         appointment_id: appointmentId,
         status,
-        checked_in_at: now
+        checked_in_at: now,
+        tenant_id: tenant_id || null
       };
       if (status === 'in_consultation') insertData.consultation_started_at = now;
       if (status === 'checked_out') insertData.consultation_ended_at = now;

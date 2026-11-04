@@ -44,16 +44,16 @@ router.get('/procedure-profitability', async (req, res, next) => {
 
     if (estError) throw estError;
 
-    // 4. Buscar custos fixos totais da unidade no mês
+    // 4. Buscar custos fixos totais ativos da unidade
     const { data: custosFixos, error: cfError } = await supabase
       .from('custos_fixos')
-      .select('valor')
-      .eq('unidade_id', unit_id)
-      .eq('competencia', competencia);
+      .select('valor_mensal')
+      .eq('unit_id', unit_id)
+      .eq('ativo', true);
 
     if (cfError) throw cfError;
 
-    const totalCustosFixos = (custosFixos || []).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
+    const totalCustosFixos = (custosFixos || []).reduce((acc: number, curr: any) => acc + Number(curr.valor_mensal), 0);
 
     // 5. Contar agendamentos realizados no mês
     const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
@@ -78,12 +78,14 @@ router.get('/procedure-profitability', async (req, res, next) => {
     // 6. Montar o relatório consolidado
     const report = (procedures || []).map((proc: any) => {
       // Insumos do procedimento
-      const procBoms = (boms || []).filter((b: any) => b.procedimento_id === proc.id);
+      const procBoms = (boms || []).filter((b: any) => b.procedure_id === proc.id);
       
       const custoMaterial = procBoms.reduce((acc: number, item: any) => {
-        const estItem = (estoque || []).find((e: any) => e.insumo_id === item.insumo_id);
-        const custoUnitario = estItem ? Number(estItem.custo_medio) : 0;
-        return acc + (Number(item.quantidade_padrao) * custoUnitario);
+        const rendimento = Number(item.insumo?.quantidade_rendimento || 1);
+        const precoEmbalagem = Number(item.insumo?.preco_embalagem_atual || 0);
+        const custoUnitario = rendimento > 0 ? precoEmbalagem / rendimento : 0;
+        const qtd = Number(item.quantidade_usada_por_procedimento ?? 0) * Number(item.numero_consultas_necessarias ?? 1);
+        return acc + (qtd * custoUnitario);
       }, 0);
 
       const custoTotal = custoMaterial + custoFixoRateado;

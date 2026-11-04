@@ -16,7 +16,7 @@ router.get('/:id/bom', async (req, res, next) => {
         *,
         insumo:insumos(*)
       `)
-      .eq('procedimento_id', id);
+      .eq('procedure_id', id);
 
     if (error) throw error;
     res.json(data);
@@ -29,7 +29,7 @@ router.get('/:id/bom', async (req, res, next) => {
 // POST /api/procedures/:id/bom - Salvar/Atualizar a ficha técnica do procedimento
 router.post('/:id/bom', async (req, res, next) => {
   const { id } = req.params;
-  const { items } = req.body; // Array de { insumo_id, quantidade_padrao }
+  const { items, tenant_id } = req.body; // Array de { insumo_id, quantidade_padrao / quantidade_usada_por_procedimento }
 
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
@@ -38,15 +38,17 @@ router.post('/:id/bom', async (req, res, next) => {
     const { error: deleteError } = await supabase
       .from('procedimento_insumos')
       .delete()
-      .eq('procedimento_id', id);
+      .eq('procedure_id', id);
 
     if (deleteError) throw deleteError;
 
     if (items && items.length > 0) {
       const insertRows = items.map((item: any) => ({
-        procedimento_id: id,
+        tenant_id: item.tenant_id || tenant_id,
+        procedure_id: id,
         insumo_id: item.insumo_id,
-        quantidade_padrao: Number(item.quantidade_padrao)
+        quantidade_usada_por_procedimento: Number(item.quantidade_usada_por_procedimento ?? item.quantidade_padrao ?? 0),
+        numero_consultas_necessarias: Number(item.numero_consultas_necessarias ?? 1)
       }));
 
       const { data, error } = await supabase

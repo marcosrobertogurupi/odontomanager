@@ -6,9 +6,9 @@ const router = Router();
 
 // GET /api/fixed-costs - Listar custos fixos
 router.get('/', async (req, res, next) => {
-  const { unit_id, competencia } = req.query; // competencia formato MM/YYYY
-  if (!unit_id || !competencia) {
-    return res.status(400).json({ error: 'unit_id and competencia are required' });
+  const { unit_id, competencia } = req.query;
+  if (!unit_id) {
+    return res.status(400).json({ error: 'unit_id is required' });
   }
 
   try {
@@ -17,21 +17,25 @@ router.get('/', async (req, res, next) => {
     const { data, error } = await supabase
       .from('custos_fixos')
       .select('*')
-      .eq('unidade_id', unit_id)
-      .eq('competencia', competencia);
+      .eq('unit_id', unit_id)
+      .order('nome_custo');
 
     if (error) throw error;
     res.json(data);
   } catch (err) {
     console.warn('[Fixed Costs Route] Fallback mock para listar custos fixos:', (err as Error).message);
-    res.json(mockStore.getCustosFixos(unit_id as string, competencia as string));
+    res.json(mockStore.getCustosFixos(unit_id as string, (competencia as string) || ''));
   }
 });
 
 // POST /api/fixed-costs - Cadastrar custo fixo
 router.post('/', async (req, res, next) => {
-  const { nome, tipo, valor, competencia, unidade_id } = req.body;
-  if (!nome || !tipo || !valor || !competencia || !unidade_id) {
+  const { nome, nome_custo, tipo, valor, valor_mensal, competencia, unidade_id, unit_id, tenant_id, ativo } = req.body;
+  const resolvedName = nome_custo || nome;
+  const resolvedValue = valor_mensal ?? valor;
+  const resolvedUnitId = unit_id || unidade_id;
+
+  if (!resolvedName || resolvedValue === undefined || !resolvedUnitId) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
 
@@ -41,11 +45,11 @@ router.post('/', async (req, res, next) => {
     const { data, error } = await supabase
       .from('custos_fixos')
       .insert([{
-        nome,
-        tipo,
-        valor: Number(valor),
-        competencia,
-        unidade_id
+        tenant_id,
+        unit_id: resolvedUnitId,
+        nome_custo: resolvedName,
+        valor_mensal: Number(resolvedValue),
+        ativo: ativo !== undefined ? Boolean(ativo) : true
       }])
       .select()
       .single();

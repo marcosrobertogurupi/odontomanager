@@ -55,13 +55,13 @@ router.get('/', async (req, res, next) => {
 
 // POST /api/appointments - Criar
 router.post('/', async (req, res, next) => {
-  const { patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id } = req.body;
+  const { patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id, tenant_id } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('appointments')
-      .insert([{ patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id }])
+      .insert([{ patient_id, professional_id, unit_id, start_time, end_time, status, room, notes, procedure_id, tenant_id: tenant_id || null }])
       .select(`
         *,
         patient:patients(*),
@@ -109,14 +109,15 @@ router.put('/:id', async (req, res, next) => {
     if (status === 'canceled' || status === 'missed') {
       const { data: currentApp } = await supabase
         .from('appointments')
-        .select('unit_id')
+        .select('unit_id, tenant_id')
         .eq('id', id)
         .single();
       
       if (currentApp) {
         await supabase.rpc('estornar_consumo_atendimento', {
           p_appointment_id: id,
-          p_unit_id: currentApp.unit_id
+          p_unit_id: currentApp.unit_id,
+          p_tenant_id: currentApp.tenant_id
         });
       }
     }

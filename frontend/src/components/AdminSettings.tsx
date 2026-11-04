@@ -602,6 +602,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
           name: formName,
           description: formDesc,
           price: Number(formPrice),
+          preco_praticado: Number(formPrice),
           tenant_id: activeTenant.id
         });
 

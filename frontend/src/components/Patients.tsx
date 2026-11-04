@@ -15,7 +15,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './Patients.module.css';
-import { formatDate } from '../lib/formatters';
+import { formatDate, formatCPF, isValidCPF } from '../lib/formatters';
 import Papelaria from './Papelaria';
 import PatientBudget from './PatientBudget';
 
@@ -58,10 +58,12 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
   const [formRg, setFormRg] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formCity, setFormCity] = useState('');
+  const [formState, setFormState] = useState('TO');
   const [formZipCode, setFormZipCode] = useState('');
   const [formResponsibleName, setFormResponsibleName] = useState('');
   const [formWeightKg, setFormWeightKg] = useState('');
   const [formSatisfaction, setFormSatisfaction] = useState('10.0');
+  const [cpfError, setCpfError] = useState('');
 
   const fetchPatients = async () => {
     if (!activeTenant) return;
@@ -100,10 +102,12 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
     setFormRg('');
     setFormAddress('');
     setFormCity('');
+    setFormState('TO');
     setFormZipCode('');
     setFormResponsibleName('');
     setFormWeightKg('');
     setFormSatisfaction('10.0');
+    setCpfError('');
     setIsDrawerOpen(true);
   };
 
@@ -113,14 +117,16 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
     setFormEmail(p.email || '');
     setFormPhone(p.phone || '');
     setFormBirthDate(p.birth_date || '');
-    setFormCpf(p.cpf || '');
+    setFormCpf(p.cpf ? formatCPF(p.cpf) : '');
     setFormRg(p.rg || '');
     setFormAddress(p.address || '');
     setFormCity(p.city || '');
+    setFormState(p.state || 'TO');
     setFormZipCode(p.zip_code || '');
     setFormResponsibleName(p.responsible_name || '');
     setFormWeightKg(p.weight_kg ? p.weight_kg.toString() : '');
     setFormSatisfaction(p.satisfaction_score ? p.satisfaction_score.toString() : '10.0');
+    setCpfError('');
     setIsDrawerOpen(true);
   };
 
@@ -128,17 +134,28 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
     e.preventDefault();
     if (!activeTenant) return;
 
+    const rawCpf = formCpf.trim();
+    const cpfDigits = rawCpf.replace(/\D/g, '');
+    if (cpfDigits.length > 0 && !isValidCPF(cpfDigits)) {
+      setCpfError('CPF inválido. Verifique os 11 dígitos informados.');
+      alert('CPF inválido. Por favor, informe um CPF válido ou deixe o campo em branco.');
+      return;
+    }
+
+    const normalizedCpf = cpfDigits.length === 11 ? formatCPF(cpfDigits) : null;
+
     const payload: any = {
-      name: formName,
-      email: formEmail || null,
-      phone: formPhone || null,
+      name: formName.trim(),
+      email: formEmail.trim() || null,
+      phone: formPhone.trim() || null,
       birth_date: formBirthDate || null,
-      cpf: formCpf || null,
-      rg: formRg || null,
-      address: formAddress || null,
-      city: formCity || null,
-      zip_code: formZipCode || null,
-      responsible_name: formResponsibleName || null,
+      cpf: normalizedCpf,
+      rg: formRg.trim() || null,
+      address: formAddress.trim() || null,
+      city: formCity.trim() || null,
+      state: formState.trim().toUpperCase() || 'TO',
+      zip_code: formZipCode.trim() || null,
+      responsible_name: formResponsibleName.trim() || null,
       weight_kg: formWeightKg ? Number(formWeightKg) : null,
       satisfaction_score: Number(formSatisfaction),
       tenant_id: activeTenant.id
@@ -162,7 +179,15 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
       fetchPatients();
     } catch (err: any) {
       console.error('Erro ao salvar paciente:', err);
-      alert('Erro ao salvar paciente: ' + err.message);
+      if (
+        err?.code === '23505' ||
+        err?.message?.includes('patients_cpf_key') ||
+        err?.message?.includes('uq_patients_tenant_cpf')
+      ) {
+        alert('Já existe um paciente cadastrado com este CPF nesta clínica.');
+      } else {
+        alert('Erro ao salvar paciente: ' + err.message);
+      }
     }
   };
 
@@ -240,7 +265,7 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
               patients.map(p => (
                 <tr key={p.id}>
                   <td className={styles.patientName}>{p.name}</td>
-                  <td>{p.cpf || '-'}</td>
+                  <td>{p.cpf ? formatCPF(p.cpf) : '-'}</td>
                   <td>{p.phone || '-'}</td>
                   <td>{p.email || '-'}</td>
                   <td>{formatDate(p.birth_date)}</td>
@@ -316,11 +341,39 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
             <label>CPF</label>
             <input 
               type="text" 
+              maxLength={14}
               className={styles.input} 
+              style={
+                cpfError || (formCpf.replace(/\D/g, '').length === 11 && !isValidCPF(formCpf))
+                  ? { borderColor: 'hsl(var(--danger))' }
+                  : undefined
+              }
               value={formCpf}
-              onChange={(e) => setFormCpf(e.target.value)}
+              onChange={(e) => {
+                const formatted = formatCPF(e.target.value);
+                setFormCpf(formatted);
+                const digits = formatted.replace(/\D/g, '');
+                if (digits.length === 11 && !isValidCPF(digits)) {
+                  setCpfError('CPF inválido. Verifique os dígitos informados.');
+                } else {
+                  setCpfError('');
+                }
+              }}
+              onBlur={() => {
+                const digits = formCpf.replace(/\D/g, '');
+                if (digits.length > 0 && !isValidCPF(digits)) {
+                  setCpfError('CPF inválido. Informe os 11 dígitos corretamente.');
+                } else {
+                  setCpfError('');
+                }
+              }}
               placeholder="000.000.000-00" 
             />
+            {cpfError && (
+              <span style={{ color: 'hsl(var(--danger))', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                {cpfError}
+              </span>
+            )}
           </div>
 
           <div className={styles.formGroup}>
@@ -385,6 +438,18 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
               value={formCity}
               onChange={(e) => setFormCity(e.target.value)}
               placeholder="Ex: Gurupi"
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>UF (Estado)</label>
+            <input 
+              type="text" 
+              maxLength={2}
+              className={styles.input} 
+              value={formState}
+              onChange={(e) => setFormState(e.target.value.toUpperCase())}
+              placeholder="Ex: TO"
             />
           </div>
 

@@ -24,13 +24,20 @@ router.get('/', async (req, res, next) => {
 
 // POST /api/procedures - Criar
 router.post('/', async (req, res, next) => {
-  const { name, description, price } = req.body;
+  const { name, description, price, preco_praticado, categoria_especialidade, tenant_id } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('procedures')
-      .insert([{ name, description, price }])
+      .insert([{
+        name,
+        description,
+        price: Number(price),
+        preco_praticado: Number(preco_praticado ?? price ?? 0),
+        categoria_especialidade: categoria_especialidade || null,
+        tenant_id: tenant_id || null
+      }])
       .select()
       .single();
 

@@ -29,15 +29,58 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+function isValidCPF(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(digits[i]) * (10 - i);
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== Number(digits[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += Number(digits[i]) * (11 - i);
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  return remainder === Number(digits[10]);
+}
+
+function formatCPF(digits: string): string {
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
 // POST /api/patients - Criar
 router.post('/', async (req, res, next) => {
-  const { name, email, phone, birth_date, cpf } = req.body;
+  const { name, email, phone, birth_date, cpf, rg, address, city, state, zip_code, responsible_name, weight_kg, satisfaction_score, tenant_id } = req.body;
+  const rawCpf = typeof cpf === 'string' ? cpf.trim() : '';
+  const cpfDigits = rawCpf.replace(/\D/g, '');
+  if (cpfDigits.length > 0 && !isValidCPF(cpfDigits)) {
+    return res.status(400).json({ error: 'CPF inválido. Informe um CPF válido com 11 dígitos ou deixe em branco.' });
+  }
+  const normalizedCpf = cpfDigits.length === 11 ? formatCPF(cpfDigits) : null;
+
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('patients')
-      .insert([{ name, email, phone, birth_date, cpf }])
+      .insert([{
+        name,
+        email: email || null,
+        phone: phone || null,
+        birth_date: birth_date || null,
+        cpf: normalizedCpf,
+        rg: rg || null,
+        address: address || null,
+        city: city || null,
+        state: state || 'TO',
+        zip_code: zip_code || null,
+        responsible_name: responsible_name || null,
+        weight_kg: weight_kg ? Number(weight_kg) : null,
+        satisfaction_score: satisfaction_score !== undefined ? Number(satisfaction_score) : 10.0,
+        tenant_id: tenant_id || null
+      }])
       .select()
       .single();
 
@@ -51,7 +94,7 @@ router.post('/', async (req, res, next) => {
       email,
       phone,
       birth_date,
-      cpf,
+      cpf: normalizedCpf || '',
       satisfaction_score: 10.0
     };
     mockStore.addPatient(newPatient);
@@ -62,13 +105,34 @@ router.post('/', async (req, res, next) => {
 // PUT /api/patients/:id - Atualizar
 router.put('/:id', async (req, res, next) => {
   const { id } = req.params;
-  const { name, email, phone, birth_date, cpf, satisfaction_score } = req.body;
+  const { name, email, phone, birth_date, cpf, rg, address, city, state, zip_code, responsible_name, weight_kg, satisfaction_score } = req.body;
+  const rawCpf = typeof cpf === 'string' ? cpf.trim() : '';
+  const cpfDigits = rawCpf.replace(/\D/g, '');
+  if (cpfDigits.length > 0 && !isValidCPF(cpfDigits)) {
+    return res.status(400).json({ error: 'CPF inválido. Informe um CPF válido com 11 dígitos ou deixe em branco.' });
+  }
+  const normalizedCpf = cpfDigits.length === 11 ? formatCPF(cpfDigits) : null;
+
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('patients')
-      .update({ name, email, phone, birth_date, cpf, satisfaction_score })
+      .update({
+        name,
+        email: email || null,
+        phone: phone || null,
+        birth_date: birth_date || null,
+        cpf: normalizedCpf,
+        rg: rg || null,
+        address: address || null,
+        city: city || null,
+        state: state || 'TO',
+        zip_code: zip_code || null,
+        responsible_name: responsible_name || null,
+        weight_kg: weight_kg ? Number(weight_kg) : null,
+        satisfaction_score
+      })
       .eq('id', id)
       .select()
       .single();

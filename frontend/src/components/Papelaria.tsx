@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useTenant } from '../contexts/TenantContext';
 import { formatDate as formatDateShort } from '../lib/formatters';
 import {
   ALL_TEMPLATES, TEMPLATES_BY_CATEGORY, CATEGORY_LABELS,
@@ -70,6 +71,7 @@ const formatDate = (dateStr?: string) => {
 };
 
 export default function Papelaria({ selectedUnit, initialPatient, onBack }: PapeleriaProps) {
+  const { activeTenant } = useTenant();
   const [step, setStep] = useState<Step>('select_template');
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -122,28 +124,35 @@ export default function Papelaria({ selectedUnit, initialPatient, onBack }: Pape
       return;
     }
     const timer = setTimeout(async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('patients')
         .select('id, name, cpf, rg, birth_date, phone, email, address, city, state, zip_code, responsible_name, weight_kg')
         .ilike('name', `%${patientSearch}%`)
         .limit(10);
+      if (activeTenant?.id) {
+        query = query.eq('tenant_id', activeTenant.id);
+      }
+      const { data } = await query;
       setPatients(data || []);
       setPatientDropdownOpen(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [patientSearch, selectedPatient]);
+  }, [patientSearch, selectedPatient, activeTenant?.id]);
 
   // ── Load doc history for selected patient ────────────────────
   useEffect(() => {
     if (!selectedPatient) { setDocHistory([]); return; }
-    supabase
+    let query = supabase
       .from('generated_documents')
       .select('id, type, title, created_at')
       .eq('patient_id', selectedPatient.id)
       .order('created_at', { ascending: false })
-      .limit(10)
-      .then(({ data }) => setDocHistory(data || []));
-  }, [selectedPatient]);
+      .limit(10);
+    if (activeTenant?.id) {
+      query = query.eq('tenant_id', activeTenant.id);
+    }
+    query.then(({ data }) => setDocHistory(data || []));
+  }, [selectedPatient, activeTenant?.id]);
 
   // ── Filtered templates ───────────────────────────────────────
   const filteredTemplates = ALL_TEMPLATES.filter(t => {
@@ -202,13 +211,14 @@ export default function Papelaria({ selectedUnit, initialPatient, onBack }: Pape
       .select('tenant_id, unit_id')
       .eq('id', user.id)
       .single();
-    if (!profile) return;
+    const resolvedTenantId = activeTenant?.id || profile?.tenant_id;
+    if (!resolvedTenantId) return;
 
     await supabase.from('generated_documents').insert({
-      tenant_id: profile.tenant_id,
+      tenant_id: resolvedTenantId,
       patient_id: selectedPatient.id,
       professional_id: user.id,
-      unit_id: selectedUnit?.id || profile.unit_id,
+      unit_id: selectedUnit?.id || profile?.unit_id || null,
       type: selectedTemplate.id,
       title: selectedTemplate.name,
       content_snapshot: { fields: fieldValues, patientName: selectedPatient.name },
@@ -219,6 +229,7 @@ export default function Papelaria({ selectedUnit, initialPatient, onBack }: Pape
       .from('generated_documents')
       .select('id, type, title, created_at')
       .eq('patient_id', selectedPatient.id)
+      .eq('tenant_id', resolvedTenantId)
       .order('created_at', { ascending: false })
       .limit(10);
     setDocHistory(data || []);

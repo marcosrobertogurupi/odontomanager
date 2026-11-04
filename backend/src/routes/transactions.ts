@@ -56,13 +56,13 @@ router.get('/summary', async (req, res, next) => {
 
 // POST /api/transactions - Criar
 router.post('/', async (req, res, next) => {
-  const { unit_id, patient_id, appointment_id, type, amount, description, date } = req.body;
+  const { unit_id, patient_id, appointment_id, type, amount, description, date, tenant_id } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('transactions')
-      .insert([{ unit_id, patient_id, appointment_id, type, amount, description, date }])
+      .insert([{ unit_id, patient_id, appointment_id, type, amount, description, date, tenant_id: tenant_id || null }])
       .select()
       .single();
 

@@ -18,7 +18,6 @@ router.get('/', async (req, res, next) => {
         *,
         estoque_unidade (
           quantidade_atual,
-          custo_medio,
           unit_id
         )
       `)
@@ -28,15 +27,18 @@ router.get('/', async (req, res, next) => {
 
     const formatted = (insumos || []).map((i: any) => {
       const est = i.estoque_unidade?.find((e: any) => e.unit_id === unit_id);
+      const rendimento = Number(i.quantidade_rendimento || 1);
+      const precoEmbalagem = Number(i.preco_embalagem_atual || 0);
       return {
         id: i.id,
         nome: i.nome,
         unidade_medida: i.unidade_medida,
         estoque_minimo: i.estoque_minimo,
         categoria: i.categoria,
-        status: i.status,
+        ativo: i.ativo,
+        status: i.ativo ? 'ativo' : 'inativo',
         quantidade_atual: est ? Number(est.quantidade_atual) : 0,
-        custo_medio: est ? Number(est.custo_medio) : 0
+        custo_medio: rendimento > 0 ? precoEmbalagem / rendimento : 0
       };
     });
 
@@ -49,18 +51,22 @@ router.get('/', async (req, res, next) => {
 
 // POST /api/inventory - Cadastrar novo insumo
 router.post('/', async (req, res, next) => {
-  const { nome, unidade_medida, estoque_minimo, categoria, status } = req.body;
+  const { nome, unidade_medida, estoque_minimo, categoria, status, ativo, tenant_id, quantidade_embalagem, quantidade_rendimento, preco_embalagem_atual } = req.body;
   try {
     if (!process.env.SUPABASE_URL) throw new Error('Supabase not configured');
 
     const { data, error } = await supabase
       .from('insumos')
       .insert([{
+        tenant_id,
         nome,
         unidade_medida,
         estoque_minimo: Number(estoque_minimo || 0),
         categoria,
-        status: status || 'ativo'
+        quantidade_embalagem: Number(quantidade_embalagem || 1),
+        quantidade_rendimento: Number(quantidade_rendimento || 1),
+        preco_embalagem_atual: Number(preco_embalagem_atual || 0),
+        ativo: ativo !== undefined ? Boolean(ativo) : status !== 'inativo'
       }])
       .select()
       .single();
@@ -100,7 +106,7 @@ router.get('/movements', async (req, res, next) => {
         )
       `)
       .eq('unit_id', unit_id)
-      .order('data', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     res.json(data);
@@ -112,7 +118,7 @@ router.get('/movements', async (req, res, next) => {
 
 // POST /api/inventory/purchases - Registrar compra e dar entrada no estoque
 router.post('/purchases', async (req, res, next) => {
-  const { insumo_id, unit_id, fornecedor, quantidade, valor_total, nota_fiscal } = req.body;
+  const { insumo_id, unit_id, tenant_id, fornecedor, quantidade, valor_total, nota_fiscal } = req.body;
   if (!insumo_id || !unit_id || !fornecedor || !quantidade || !valor_total) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
   }
@@ -129,7 +135,8 @@ router.post('/purchases', async (req, res, next) => {
       p_quantidade: Number(quantidade),
       p_valor_total: Number(valor_total),
       p_valor_unitario: valor_unitario,
-      p_nota_fiscal: nota_fiscal || null
+      p_nota_fiscal: nota_fiscal || null,
+      p_tenant_id: tenant_id
     });
 
     if (error) throw error;
