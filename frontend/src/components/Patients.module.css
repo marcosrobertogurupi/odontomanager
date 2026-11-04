@@ -109,6 +109,27 @@
   gap: 10px;
 }
 
+.btnOrcamento {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: hsl(var(--success) / 0.12);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success) / 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btnOrcamento:hover {
+  background-color: hsl(var(--success));
+  color: white;
+  border-color: hsl(var(--success));
+}
+
 .btnPapelaria {
   display: inline-flex;
   align-items: center;

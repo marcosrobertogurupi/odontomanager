@@ -9,13 +9,15 @@ import {
   Phone,
   Mail,
   Calendar,
-  FileText
+  FileText,
+  Calculator
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './Patients.module.css';
 import { formatDate } from '../lib/formatters';
 import Papelaria from './Papelaria';
+import PatientBudget from './PatientBudget';
 
 interface Patient {
   id: string;
@@ -45,6 +47,7 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [papelariaPatient, setPapelariaPatient] = useState<Patient | null>(null);
+  const [budgetPatient, setBudgetPatient] = useState<Patient | null>(null);
 
   // Form Fields
   const [formName, setFormName] = useState('');
@@ -181,6 +184,20 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
     }
   };
 
+  if (budgetPatient) {
+    return (
+      <PatientBudget
+        patient={budgetPatient}
+        selectedUnit={selectedUnit}
+        onBack={() => setBudgetPatient(null)}
+        onOpenPapelaria={(p) => {
+          setBudgetPatient(null);
+          setPapelariaPatient(p as Patient);
+        }}
+      />
+    );
+  }
+
   if (papelariaPatient) {
     return (
       <Papelaria
@@ -235,6 +252,14 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
                   </td>
                   <td>
                     <div className={styles.actionsCell}>
+                      <button
+                        onClick={() => setBudgetPatient(p)}
+                        className={styles.btnOrcamento}
+                        title="Fazer Orçamento e Plano de Tratamento para este paciente"
+                      >
+                        <Calculator size={15} />
+                        <span>Orçamento</span>
+                      </button>
                       <button
                         onClick={() => setPapelariaPatient(p)}
                         className={styles.btnPapelaria}

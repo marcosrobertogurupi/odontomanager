@@ -14,10 +14,10 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { tenant_id, phone, message, channel = 'whatsapp' } = body
+    const { tenant_id, phone, message, channel = 'whatsapp', file_base64, doc_name } = body
 
-    if (!tenant_id || !phone || !message) {
-      throw new Error("Parâmetros inválidos: tenant_id, phone e message são obrigatórios.")
+    if (!tenant_id || !phone || (!message && !file_base64)) {
+      throw new Error("Parâmetros inválidos: tenant_id, phone e message (ou file_base64) são obrigatórios.")
     }
 
     const supabaseClient = createClient(
@@ -77,31 +77,58 @@ serve(async (req) => {
 
       const serverUrl = integration.uazapi_server_url || 'https://api.uazapi.com'
       const cleanServerUrl = serverUrl.replace(/\/$/, '')
-      const url = `${cleanServerUrl}/send/text`
 
       let cleanNumber = phone.replace(/\D/g, '')
       if (cleanNumber.length === 10 || cleanNumber.length === 11) {
         cleanNumber = '55' + cleanNumber
       }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'token': integration.uazapi_token
-        },
-        body: JSON.stringify({
-          number: cleanNumber,
-          text: message
+      if (file_base64) {
+        const mediaUrl = `${cleanServerUrl}/send/media`
+        const mediaResponse = await fetch(mediaUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'token': integration.uazapi_token
+          },
+          body: JSON.stringify({
+            number: cleanNumber,
+            type: 'document',
+            file: file_base64.startsWith('data:')
+              ? file_base64
+              : `data:application/pdf;base64,${file_base64}`,
+            docName: doc_name || 'Orcamento_Odontologico.pdf',
+            text: message || ''
+          })
         })
-      })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Erro na API UAZAPI: ${response.status} - ${errorText}`)
+        if (!mediaResponse.ok) {
+          const errorText = await mediaResponse.text()
+          throw new Error(`Erro na API UAZAPI (Media): ${mediaResponse.status} - ${errorText}`)
+        }
+
+        resData = await mediaResponse.json()
+      } else {
+        const url = `${cleanServerUrl}/send/text`
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'token': integration.uazapi_token
+          },
+          body: JSON.stringify({
+            number: cleanNumber,
+            text: message
+          })
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Erro na API UAZAPI: ${response.status} - ${errorText}`)
+        }
+
+        resData = await response.json()
       }
-
-      resData = await response.json()
     }
 
     return new Response(JSON.stringify({ success: true, data: resData }), {
