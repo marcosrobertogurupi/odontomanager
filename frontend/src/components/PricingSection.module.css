@@ -3,6 +3,10 @@
   flex-direction: column;
   gap: 24px;
   animation: fadeIn 0.3s ease-out;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 @keyframes fadeIn {
@@ -141,12 +145,15 @@
 /* Layout Duas Colunas */
 .pricingSplitLayout {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
   gap: 24px;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1250px) {
   .pricingSplitLayout {
     grid-template-columns: 1fr;
   }
@@ -161,6 +168,9 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cardHeader {
@@ -169,6 +179,8 @@
   align-items: center;
   border-bottom: 1px solid hsl(var(--border-color));
   padding-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .cardTitle {
@@ -185,10 +197,16 @@
   overflow-x: auto;
   border-radius: var(--radius-xs);
   border: 1px solid hsl(var(--border-color));
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  background: hsl(var(--bg-card));
 }
 
 .materialsTable {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
@@ -196,15 +214,16 @@
 
 .materialsTable th {
   background: hsl(var(--bg-app));
-  padding: 10px 12px;
+  padding: 10px 8px;
   font-weight: 600;
   color: hsl(var(--text-muted));
   border-bottom: 1px solid hsl(var(--border-color));
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .materialsTable td {
-  padding: 8px 12px;
+  padding: 8px 6px;
   border-bottom: 1px solid hsl(var(--border-color));
   vertical-align: middle;
 }
@@ -219,13 +238,14 @@
 
 .tableInput {
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid hsl(var(--border-color));
   border-radius: var(--radius-xs);
   background: hsl(var(--bg-card));
   color: hsl(var(--text-main));
   font-size: 13px;
   outline: none;
+  box-sizing: border-box;
   transition: var(--transition-fast);
 }
 
@@ -236,7 +256,14 @@
 
 .tableInputNumber {
   text-align: right;
-  max-width: 90px;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.tableInputNumber::-webkit-outer-spin-button,
+.tableInputNumber::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* Botões */
@@ -313,16 +340,29 @@
   gap: 12px;
 }
 
+@media (max-width: 640px) {
+  .formGrid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .formGrid3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
 }
 
+@media (max-width: 960px) {
+  .formGrid3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .formGroup {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .label {
@@ -339,6 +379,7 @@
   color: hsl(var(--text-main));
   font-size: 14px;
   outline: none;
+  box-sizing: border-box;
   transition: var(--transition-fast);
 }
 
@@ -356,6 +397,7 @@
   font-size: 14px;
   outline: none;
   cursor: pointer;
+  box-sizing: border-box;
   transition: var(--transition-fast);
 }
 
@@ -372,7 +414,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .resultHighlightValue {
@@ -390,6 +435,8 @@
   padding: 16px;
   border-radius: var(--radius-sm);
   border: 1px solid hsl(var(--border-color));
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .resultRow {
@@ -397,6 +444,7 @@
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
+  gap: 12px;
 }
 
 .resultRowLabel {
@@ -502,6 +550,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   transition: var(--transition-fast);
   cursor: pointer;
   background: hsl(var(--bg-app));
@@ -511,3 +561,13 @@
   border-color: hsl(var(--primary));
   background: hsl(var(--primary-light));
 }
+
+@media (max-width: 640px) {
+  .modalContent {
+    padding: 16px;
+  }
+  .card {
+    padding: 16px;
+  }
+}
+

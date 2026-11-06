@@ -207,6 +207,10 @@ function AppContent() {
           display: 'flex',
           flexDirection: 'column',
           marginLeft: isSidebarCollapsed ? '80px' : '260px',
+          width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 260px)',
+          maxWidth: isSidebarCollapsed ? 'calc(100vw - 80px)' : 'calc(100vw - 260px)',
+          minWidth: 0,
+          boxSizing: 'border-box',
           transition: 'var(--transition-smooth)'
         }}
       >
@@ -244,10 +248,14 @@ function AppContent() {
             marginTop: isReadOnly ? '124px' : '80px', 
             padding: '32px', 
             minHeight: 'calc(100vh - 80px)',
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
             transition: 'var(--transition-smooth)'
           }}
         >
-          <div className="fade-in-up">
+          <div className="fade-in-up" style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
             <ErrorBoundary>
               {renderContent()}
             </ErrorBoundary>

@@ -706,7 +706,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={styles.badgeDraMariaPaula}>
             <Sparkles size={14} />
             Planilha Oficial Integrada
@@ -845,14 +845,14 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                 <table className={styles.materialsTable}>
                   <thead>
                     <tr>
-                      <th style={{ minWidth: '180px' }}>Insumo / Material</th>
-                      <th style={{ width: '70px', textAlign: 'right' }}>Rende</th>
-                      <th style={{ width: '85px', textAlign: 'right' }}>Preço Emb.</th>
-                      <th style={{ width: '70px', textAlign: 'right' }}>Uso/Cons.</th>
-                      <th style={{ width: '85px', textAlign: 'right' }}>Vlr/Cons.</th>
-                      <th style={{ width: '60px', textAlign: 'right' }}>Sessões</th>
-                      <th style={{ width: '90px', textAlign: 'right' }}>Total (R$)</th>
-                      <th style={{ width: '40px' }}></th>
+                      <th style={{ minWidth: '200px' }}>Insumo / Material</th>
+                      <th style={{ width: '95px', minWidth: '90px', textAlign: 'right' }} title="Quantas doses ou consultas rende a embalagem inteira">Rendimento</th>
+                      <th style={{ width: '110px', minWidth: '105px', textAlign: 'right' }} title="Preço total pago na compra da embalagem">Preço Emb. (R$)</th>
+                      <th style={{ width: '95px', minWidth: '90px', textAlign: 'right' }} title="Quantidade gasta em cada consulta">Qtd. Uso</th>
+                      <th style={{ width: '95px', minWidth: '90px', textAlign: 'right' }} title="Custo calculado por consulta">Custo/Cons.</th>
+                      <th style={{ width: '80px', minWidth: '75px', textAlign: 'right' }} title="Número de consultas necessárias do procedimento">Sessões</th>
+                      <th style={{ width: '105px', minWidth: '100px', textAlign: 'right' }} title="Custo total deste insumo no tratamento">Total (R$)</th>
+                      <th style={{ width: '45px', textAlign: 'center' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -886,8 +886,10 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                               <input 
                                 type="number"
                                 step="any"
+                                min="0.001"
                                 className={`${styles.tableInput} ${styles.tableInputNumber}`}
                                 title="Quantas doses / usos rende a embalagem"
+                                placeholder="1"
                                 value={m.quantidade_rendimento}
                                 onChange={(e) => handleMaterialChange(idx, 'quantidade_rendimento', parseFloat(e.target.value) || 1)}
                               />
@@ -896,8 +898,10 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                               <input 
                                 type="number"
                                 step="0.01"
+                                min="0"
                                 className={`${styles.tableInput} ${styles.tableInputNumber}`}
                                 title="Preço total pago na embalagem"
+                                placeholder="0.00"
                                 value={m.preco_embalagem_atual}
                                 onChange={(e) => handleMaterialChange(idx, 'preco_embalagem_atual', parseFloat(e.target.value) || 0)}
                               />
@@ -906,26 +910,30 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                               <input 
                                 type="number"
                                 step="any"
+                                min="0"
                                 className={`${styles.tableInput} ${styles.tableInputNumber}`}
                                 title="Quantidade gasta em cada consulta"
+                                placeholder="1"
                                 value={m.quantidade_usada_por_procedimento}
                                 onChange={(e) => handleMaterialChange(idx, 'quantidade_usada_por_procedimento', parseFloat(e.target.value) || 0)}
                               />
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 600, color: 'hsl(var(--text-muted))' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: 'hsl(var(--text-muted))', whiteSpace: 'nowrap' }}>
                               R$ {vlrConsulta.toFixed(2)}
                             </td>
                             <td>
                               <input 
                                 type="number"
                                 step="1"
+                                min="1"
                                 className={`${styles.tableInput} ${styles.tableInputNumber}`}
                                 title="Número de consultas necessárias do procedimento"
+                                placeholder="1"
                                 value={m.numero_consultas_necessarias}
                                 onChange={(e) => handleMaterialChange(idx, 'numero_consultas_necessarias', parseFloat(e.target.value) || 1)}
                               />
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: 'hsl(var(--text-main))' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: 'hsl(var(--text-main))', whiteSpace: 'nowrap' }}>
                               R$ {vlrTotal.toFixed(2)}
                             </td>
                             <td style={{ textAlign: 'center' }}>
@@ -945,7 +953,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                 </table>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '12px' }}>
                 <button onClick={handleAddMaterialRow} className={styles.secondaryBtn}>
                   <Plus size={15} />
                   Adicionar Material
@@ -1022,7 +1030,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                   </div>
                 </div>
 
-                <div style={{ background: 'hsl(var(--bg-app))', padding: '12px 14px', borderRadius: 'var(--radius-xs)', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ background: 'hsl(var(--bg-app))', padding: '12px 14px', borderRadius: 'var(--radius-xs)', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                   <span>Custo Hora Clínica da Unidade:</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <strong>R$ {custoHoraClinicaCalculado.toFixed(2)} / hora</strong>
@@ -1175,7 +1183,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                   </div>
 
                   {procedurePricePracticed > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'hsl(var(--bg-app))', padding: '12px 14px', borderRadius: 'var(--radius-xs)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'hsl(var(--bg-app))', padding: '12px 14px', borderRadius: 'var(--radius-xs)', flexWrap: 'wrap', gap: '8px' }}>
                       <div>
                         <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))' }}>Lucro Líquido Real: </span>
                         <strong style={{ color: lucroLiquidoReal >= 0 ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
@@ -1354,8 +1362,8 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
             </div>
 
             {/* Form de adicionar novo custo */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', background: 'hsl(var(--bg-app))', padding: '14px', borderRadius: 'var(--radius-xs)' }}>
-              <div className={styles.formGroup} style={{ flex: 2 }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', background: 'hsl(var(--bg-app))', padding: '14px', borderRadius: 'var(--radius-xs)', flexWrap: 'wrap' }}>
+              <div className={styles.formGroup} style={{ flex: '2 1 200px' }}>
                 <label className={styles.label}>Nome do Custo (ex: Aluguel, Pro Labore, CRO, Estágio)</label>
                 <input 
                   type="text" 
@@ -1365,7 +1373,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                   onChange={(e) => setNovoCustoNome(e.target.value)}
                 />
               </div>
-              <div className={styles.formGroup} style={{ flex: 1 }}>
+              <div className={styles.formGroup} style={{ flex: '1 1 120px' }}>
                 <label className={styles.label}>Valor Mensal (R$)</label>
                 <input 
                   type="number" 
@@ -1379,7 +1387,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
               <button 
                 onClick={handleAddNovoCusto}
                 className={styles.primaryBtn}
-                style={{ height: '38px' }}
+                style={{ height: '38px', minWidth: '110px' }}
               >
                 <Plus size={15} />
                 Adicionar
@@ -1434,7 +1442,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', paddingTop: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '14px', fontWeight: 600 }}>TOTAL CUSTOS FIXOS:</span>
               <strong style={{ fontSize: '20px', color: 'hsl(var(--primary))' }}>
                 R$ {totalCustosFixosMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1483,7 +1491,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                     <th>Especialidade</th>
                     <th style={{ textAlign: 'right' }}>Preço Praticado</th>
                     <th style={{ textAlign: 'right' }}>Tempo Cadeira</th>
-                    <th style={{ textAlign: 'center' }}>Ações</th>
+                    <th style={{ textAlign: 'center', width: '160px' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
