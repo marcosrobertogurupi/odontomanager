@@ -984,7 +984,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
                 className={styles.input} 
                 value={clinicName}
                 onChange={(e) => setClinicName(e.target.value)}
-                placeholder="Ex: Clinica Talissa"
+                placeholder="Ex: Clínica Talissa"
                 required 
               />
             </div>

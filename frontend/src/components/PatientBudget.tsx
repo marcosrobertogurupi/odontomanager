@@ -1504,7 +1504,7 @@ export default function PatientBudget({
           </div>
 
           <div className={styles.formGroup}>
-            <label>Modalidade de Pagamento</label>
+            <label>Forma de Pagamento</label>
             <select
               className={styles.select}
               value={paymentMethod}

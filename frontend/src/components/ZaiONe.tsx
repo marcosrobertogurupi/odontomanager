@@ -415,7 +415,7 @@ export default function ZaiONe() {
       return;
     }
 
-    const defaultMsg = `Lembrete de consulta - OdontoManager. Confirme respondendo Sim ou Nao.`;
+    const defaultMsg = `Lembrete de consulta — OdontoManager. Confirme respondendo Sim ou Não.`;
     const message = prompt("Digite a mensagem de SMS:", defaultMsg);
     if (!message) return;
 

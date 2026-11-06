@@ -659,7 +659,7 @@ const encBucomaxiloAbscesso = makeEncaminhamento(
   (d) => `
 <div class="encaminhamento-text">
   <p><strong>AO COLEGA BUCOMAXILO</strong></p>
-  <p>Encaminho a paciente supracitada para avaliação e conduta de possível abscesso em região de <strong>${d.regiao || blankLine()}</strong>.</p>
+  <p>Encaminho o(a) paciente supracitado(a) para avaliação e conduta de possível abscesso em região de <strong>${d.regiao || blankLine()}</strong>.</p>
   <p><strong>Histórico:</strong> ${d.historico || blankLine('', 80)}</p>
   <p>Solicito avaliação cautelosa por risco de evolução para Angina de Ludwig.</p>
   <p><strong>H.D:</strong> ${d.hd || blankLine()}</p>
