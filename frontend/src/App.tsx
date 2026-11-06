@@ -9,6 +9,7 @@ import Patients from './components/Patients';
 import Financial from './components/Financial';
 import AdminSettings from './components/AdminSettings';
 import InventoryCosts from './components/InventoryCosts';
+import PricingSection from './components/PricingSection';
 import Papelaria from './components/Papelaria';
 import ErrorBoundary from './components/ErrorBoundary';
 import UpdateNotifier from './components/UpdateNotifier';
@@ -68,6 +69,7 @@ function AppContent() {
       'zai-chat': ['clinic_owner', 'admin', 'dentist', 'receptionist', 'finance'],
       patients: ['clinic_owner', 'admin', 'dentist', 'receptionist'],
       financial: ['clinic_owner', 'admin', 'finance'],
+      pricing: ['clinic_owner', 'admin', 'dentist', 'finance', 'super_admin'],
       'inventory-costs': ['clinic_owner', 'admin', 'finance'],
       papelaria: ['clinic_owner', 'admin', 'dentist'],
       admin: ['clinic_owner', 'admin', 'super_admin']
@@ -177,6 +179,8 @@ function AppContent() {
         return <Patients searchTerm={searchTerm} selectedUnit={units.find(u => u.id === selectedUnit)} />;
       case 'financial':
         return <Financial selectedUnit={selectedUnit} />;
+      case 'pricing':
+        return <PricingSection selectedUnit={selectedUnit} />;
       case 'inventory-costs':
         return <InventoryCosts selectedUnit={selectedUnit} />;
       case 'papelaria':

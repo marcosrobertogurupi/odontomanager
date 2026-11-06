@@ -1,0 +1,513 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.headerSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  color: hsl(var(--text-main));
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: hsl(var(--text-muted));
+  margin-top: 4px;
+}
+
+.badgeDraMariaPaula {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  color: hsl(var(--primary));
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+/* Tabs */
+.tabsContainer {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid hsl(var(--border-color));
+  padding-bottom: 4px;
+  overflow-x: auto;
+}
+
+.tabButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--text-muted));
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tabButton:hover {
+  background: hsl(var(--border-color));
+  color: hsl(var(--text-main));
+}
+
+.activeTab {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary-light)) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Resumo / Cards */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.metricCard {
+  background: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.metricCard:hover {
+  border-color: hsl(var(--primary));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.metricHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: hsl(var(--text-muted));
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.metricValue {
+  font-size: 26px;
+  font-weight: 800;
+  color: hsl(var(--text-main));
+  letter-spacing: -0.5px;
+}
+
+.metricSubtext {
+  font-size: 12px;
+  color: hsl(var(--text-muted));
+}
+
+/* Layout Duas Colunas */
+.pricingSplitLayout {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .pricingSplitLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid hsl(var(--border-color));
+  padding-bottom: 14px;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Tabela de Materiais (Ficha Técnica) */
+.tableContainer {
+  overflow-x: auto;
+  border-radius: var(--radius-xs);
+  border: 1px solid hsl(var(--border-color));
+}
+
+.materialsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.materialsTable th {
+  background: hsl(var(--bg-app));
+  padding: 10px 12px;
+  font-weight: 600;
+  color: hsl(var(--text-muted));
+  border-bottom: 1px solid hsl(var(--border-color));
+  white-space: nowrap;
+}
+
+.materialsTable td {
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border-color));
+  vertical-align: middle;
+}
+
+.materialsTable tr:last-child td {
+  border-bottom: none;
+}
+
+.materialsTable tr:hover {
+  background: hsla(var(--border-color), 0.3);
+}
+
+.tableInput {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-main));
+  font-size: 13px;
+  outline: none;
+  transition: var(--transition-fast);
+}
+
+.tableInput:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.tableInputNumber {
+  text-align: right;
+  max-width: 90px;
+}
+
+/* Botões */
+.primaryBtn {
+  background: hsl(var(--primary));
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: var(--transition-fast);
+}
+
+.primaryBtn:hover {
+  background: hsl(var(--primary-hover));
+}
+
+.secondaryBtn {
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-main));
+  border: 1px solid hsl(var(--border-color));
+  padding: 8px 14px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+
+.secondaryBtn:hover {
+  background: hsl(var(--border-color));
+}
+
+.dangerBtn {
+  background: transparent;
+  color: hsl(var(--danger));
+  border: none;
+  padding: 6px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.dangerBtn:hover {
+  background: hsl(var(--danger-light));
+}
+
+.badgeTemplate {
+  background: hsl(var(--primary-light));
+  color: hsl(var(--primary));
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Calculadora / Inputs Form */
+.formGrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.formGrid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--text-muted));
+}
+
+.input {
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-main));
+  font-size: 14px;
+  outline: none;
+  transition: var(--transition-fast);
+}
+
+.input:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.select {
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-main));
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.select:focus {
+  border-color: hsl(var(--primary));
+}
+
+/* Painel de Resultado Destaque */
+.resultHighlightCard {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.03) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.resultHighlightValue {
+  font-size: 30px;
+  font-weight: 900;
+  color: hsl(var(--success));
+  letter-spacing: -0.5px;
+}
+
+.resultBreakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: hsl(var(--bg-app));
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid hsl(var(--border-color));
+}
+
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.resultRowLabel {
+  color: hsl(var(--text-muted));
+}
+
+.resultRowValue {
+  font-weight: 600;
+  color: hsl(var(--text-main));
+}
+
+.divider {
+  height: 1px;
+  background: hsl(var(--border-color));
+  margin: 4px 0;
+}
+
+/* Diagnóstico Badge */
+.healthBadgeSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: hsl(var(--success-light));
+  color: hsl(var(--success));
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.healthBadgeWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: hsl(var(--warning-light));
+  color: hsl(var(--warning));
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.healthBadgeDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: hsl(var(--danger-light));
+  color: hsl(var(--danger));
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Callout Didático da Planilha */
+.explanationBox {
+  background: hsl(var(--bg-app));
+  border-left: 4px solid hsl(var(--primary));
+  padding: 14px 16px;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: hsl(var(--text-muted));
+}
+
+.explanationBox strong {
+  color: hsl(var(--text-main));
+}
+
+/* Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modalContent {
+  background: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  padding: 24px;
+  width: 100%;
+  max-width: 650px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.templateCard {
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: var(--transition-fast);
+  cursor: pointer;
+  background: hsl(var(--bg-app));
+}
+
+.templateCard:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary-light));
+}

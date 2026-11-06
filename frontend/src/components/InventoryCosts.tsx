@@ -1702,6 +1702,26 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
       {activeTab === 'precificacao' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(59, 130, 246, 0.08) 100%)',
+            border: '1px solid rgba(124, 58, 237, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '14px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '16px'
+          }}>
+            <div>
+              <strong style={{ color: 'hsl(var(--primary))', fontSize: '15px' }}>
+                ✨ Novo Módulo Completo de Precificação Oficial da Planilha
+              </strong>
+              <p style={{ fontSize: '13px', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>
+                Criamos a seção dedicada <strong>Precificação</strong> no menu lateral, com os 8 procedimentos oficiais da planilha (Endodontia, Clareamento, Implante, Cirurgia, etc.), cálculo de Custo da Hora Clínica e Ficha Técnica detalhada.
+              </p>
+            </div>
+          </div>
+
           {/* Seletor de Especialidade e Procedimento */}
           <div className={styles.contentCard} style={{ display: 'flex', flexDirection: 'row', gap: '24px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className={styles.formGroup} style={{ flex: 1, minWidth: '200px' }}>
