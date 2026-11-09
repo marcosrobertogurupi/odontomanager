@@ -23,10 +23,13 @@ import {
   DollarSign as MoneyIcon,
   X,
   ShieldAlert,
-  RotateCcw
+  RotateCcw,
+  FileUp,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
+import InvoiceImportModal from './InvoiceImportModal';
 import styles from './InventoryCosts.module.css';
 
 interface InventoryCostsProps {
@@ -83,6 +86,7 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
   const [selectedInsumoForEdit, setSelectedInsumoForEdit] = useState<any>(null);
   
   const [isNewCompraOpen, setIsNewCompraOpen] = useState(false);
+  const [isInvoiceImportOpen, setIsInvoiceImportOpen] = useState(false);
   const [isNewCustoOpen, setIsNewCustoOpen] = useState(false);
   const [isAjusteManualOpen, setIsAjusteManualOpen] = useState(false);
 
@@ -1331,6 +1335,20 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
                     <button onClick={() => setIsAjusteManualOpen(true)} className={styles.secondaryBtn}>
                       Ajuste Manual
                     </button>
+                    <button 
+                      onClick={() => setIsInvoiceImportOpen(true)} 
+                      className={styles.primaryBtn}
+                      style={{ 
+                        background: 'linear-gradient(135deg, hsl(var(--primary)), #8b5cf6)', 
+                        border: 'none',
+                        color: '#fff',
+                        boxShadow: '0 2px 10px rgba(139, 92, 246, 0.35)'
+                      }}
+                      title="Importar entradas de estoque a partir de PDF ou foto da nota/cupom fiscal via IA"
+                    >
+                      <Sparkles size={14} />
+                      Importar por Nota / Foto (IA)
+                    </button>
                     <button onClick={() => setIsNewCompraOpen(true)} className={styles.primaryBtn}>
                       <Plus size={14} />
                       Registrar Compra
@@ -2250,6 +2268,50 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
         </div>
 
         <form className={styles.form} onSubmit={handleAddCompraSubmit}>
+          {/* Banner de atalho para importação por foto/PDF */}
+          <div style={{
+            background: 'hsla(var(--primary), 0.08)',
+            border: '1px solid hsla(var(--primary), 0.25)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: 'hsl(var(--text-main))', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={14} style={{ color: 'hsl(var(--primary))' }} />
+                Importar por PDF ou Foto
+              </div>
+              <div style={{ fontSize: '11px', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>
+                Leitura de NF-e/cupom por IA e conversão de caixas para unidades.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsNewCompraOpen(false);
+                setIsInvoiceImportOpen(true);
+              }}
+              style={{
+                background: 'linear-gradient(135deg, hsl(var(--primary)), #8b5cf6)',
+                color: '#fff',
+                border: 'none',
+                padding: '7px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
+              }}
+            >
+              Importar NF
+            </button>
+          </div>
+
           <div className={styles.formGroup}>
             <label>Insumo Adquirido</label>
             <select 
@@ -2626,6 +2688,19 @@ export default function InventoryCosts({ selectedUnit }: InventoryCostsProps) {
           </div>
         </form>
       </div>
+
+      {/* Modal de Importação de Estoque por Nota Fiscal / Foto (IA) */}
+      <InvoiceImportModal
+        isOpen={isInvoiceImportOpen}
+        onClose={() => setIsInvoiceImportOpen(false)}
+        selectedUnit={selectedUnit}
+        insumosExistentes={insumos}
+        unidadesMedidaDisponiveis={unidadesMedida}
+        onImportSuccess={async () => {
+          await fetchInsumosAndEstoque();
+          await fetchMovements();
+        }}
+      />
 
     </div>
   );
