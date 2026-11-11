@@ -200,13 +200,14 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 280px;
   -webkit-overflow-scrolling: touch;
   background: hsl(var(--bg-card));
 }
 
 .materialsTable {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;

@@ -22,7 +22,10 @@ import {
   Check, 
   Info,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  Package,
+  Search,
+  X
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
@@ -47,6 +50,295 @@ interface MaterialRow {
   preco_embalagem_atual: number;
   quantidade_usada_por_procedimento: number;
   numero_consultas_necessarias: number;
+}
+
+interface InsumoComboboxProps {
+  nome: string;
+  insumoId?: string;
+  insumos: any[];
+  openUpwards?: boolean;
+  onSelectStock: (insumo: any) => void;
+  onChangeCustom: (nome: string) => void;
+  onClear: () => void;
+}
+
+function InsumoCombobox({
+  nome,
+  insumoId,
+  insumos,
+  openUpwards = false,
+  onSelectStock,
+  onChangeCustom,
+  onClear
+}: InsumoComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(nome);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSearch(nome);
+  }, [nome]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredInsumos = useMemo(() => {
+    if (!search || !search.trim()) return insumos;
+    const cleanSearch = search
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    return insumos.filter(i => {
+      const cleanName = (i.nome || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const cleanCat = (i.categoria || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      return cleanName.includes(cleanSearch) || cleanCat.includes(cleanSearch);
+    });
+  }, [search, insumos]);
+
+  const isLinked = Boolean(insumoId);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', minWidth: '220px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <input
+          type="text"
+          className={styles.tableInput}
+          style={{
+            paddingRight: '48px',
+            borderColor: isLinked ? 'hsl(var(--primary))' : undefined,
+            background: isLinked ? 'hsl(var(--primary-light) / 0.25)' : undefined,
+            fontWeight: isLinked ? 600 : 400
+          }}
+          placeholder="Buscar do estoque ou digitar avulso..."
+          value={search}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            const val = e.target.value;
+            setSearch(val);
+            onChangeCustom(val);
+            setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setIsOpen(false);
+            } else if (e.key === 'Enter') {
+              if (filteredInsumos.length > 0 && search.trim() && !isLinked) {
+                const exact = filteredInsumos.find(
+                  i => i.nome.trim().toLowerCase() === search.trim().toLowerCase()
+                );
+                if (exact) {
+                  onSelectStock(exact);
+                  setIsOpen(false);
+                  return;
+                }
+              }
+              setIsOpen(false);
+            }
+          }}
+        />
+
+        <div style={{ position: 'absolute', right: '6px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                onClear();
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'hsl(var(--text-muted))',
+                cursor: 'pointer',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              title="Limpar campo"
+            >
+              <X size={13} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: isLinked ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
+              cursor: 'pointer',
+              padding: '2px 4px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Ver produtos do estoque"
+          >
+            <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Indicador de status do insumo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+        {isLinked ? (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            color: 'hsl(var(--primary))',
+            backgroundColor: 'hsl(var(--primary-light))',
+            padding: '1px 6px',
+            borderRadius: '4px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px'
+          }}>
+            <Package size={10} /> Vinculado ao Estoque
+          </span>
+        ) : nome.trim() ? (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 600,
+            color: 'hsl(var(--text-muted))',
+            padding: '1px 4px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px'
+          }}>
+            ✏️ Item Avulso (não vinculado)
+          </span>
+        ) : null}
+      </div>
+
+      {/* Popover / Dropdown de Produtos do Estoque */}
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          ...(openUpwards ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }),
+          left: 0,
+          width: 'max(100%, 350px)',
+          maxHeight: '250px',
+          overflowY: 'auto',
+          backgroundColor: 'hsl(var(--bg-card))',
+          border: '1px solid hsl(var(--border-color))',
+          borderRadius: 'var(--radius-xs)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+          zIndex: 9999,
+          padding: '6px'
+        }}>
+          {/* Opção rápida de item avulso */}
+          {search.trim() && !filteredInsumos.some(i => i.nome.toLowerCase() === search.toLowerCase()) && (
+            <div
+              onClick={() => {
+                onChangeCustom(search.trim());
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-xs)',
+                cursor: 'pointer',
+                backgroundColor: 'hsl(var(--bg-app))',
+                border: '1px dashed hsl(var(--border-color))',
+                marginBottom: '6px',
+                fontSize: '12px',
+                color: 'hsl(var(--text-main))',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>✏️ Usar <strong>"{search.trim()}"</strong> como item avulso</span>
+            </div>
+          )}
+
+          <div style={{
+            padding: '4px 8px',
+            fontSize: '11px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            color: 'hsl(var(--text-muted))',
+            borderBottom: '1px solid hsl(var(--border-color))',
+            marginBottom: '4px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>Produtos em Estoque ({filteredInsumos.length})</span>
+            <span style={{ fontSize: '10px', fontWeight: 500, textTransform: 'none' }}>Clique p/ selecionar</span>
+          </div>
+
+          {filteredInsumos.length === 0 ? (
+            <div style={{ padding: '12px', fontSize: '12px', color: 'hsl(var(--text-muted))', textAlign: 'center' }}>
+              Nenhum produto em estoque encontrado com esse termo.
+            </div>
+          ) : (
+            filteredInsumos.map(ins => (
+              <div
+                key={ins.id}
+                onClick={() => {
+                  onSelectStock(ins);
+                  setIsOpen(false);
+                }}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 'var(--radius-xs)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  transition: 'background 0.1s',
+                  fontSize: '12px',
+                  backgroundColor: insumoId === ins.id ? 'hsl(var(--primary-light))' : 'transparent',
+                  borderBottom: '1px solid hsl(var(--border-color) / 0.5)'
+                }}
+                onMouseEnter={(e) => {
+                  if (insumoId !== ins.id) (e.currentTarget as HTMLElement).style.backgroundColor = 'hsl(var(--bg-app))';
+                }}
+                onMouseLeave={(e) => {
+                  if (insumoId !== ins.id) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 700, color: 'hsl(var(--text-main))' }}>
+                    {ins.nome}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'hsl(var(--text-muted))', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                    {ins.categoria && <span>{ins.categoria}</span>}
+                    {Number(ins.quantidade_rendimento || 1) > 1 && (
+                      <span>• Rend: {Number(ins.quantidade_rendimento)} usos</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontWeight: 700, color: 'hsl(var(--primary))' }}>
+                    R$ {Number(ins.preco_embalagem_atual || 0).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'hsl(var(--text-muted))' }}>
+                    Preço Emb.
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PricingSection({ selectedUnit }: PricingSectionProps) {
@@ -426,6 +718,55 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
           copy[idx].preco_embalagem_atual = Number(found.preco_embalagem_atual || 0);
         }
       }
+      return copy;
+    });
+  };
+
+  const handleSelectInsumoFromStock = (idx: number, insumo: any) => {
+    setMaterials(prev => {
+      const copy = [...prev];
+      copy[idx] = {
+        ...copy[idx],
+        insumo_id: insumo.id,
+        nome: insumo.nome,
+        preco_embalagem_atual: Number(insumo.preco_embalagem_atual || 0),
+        quantidade_rendimento: Number(insumo.quantidade_rendimento || insumo.quantidade_embalagem || 1),
+        quantidade_embalagem: Number(insumo.quantidade_embalagem || 1)
+      };
+      return copy;
+    });
+  };
+
+  const handleCustomMaterialName = (idx: number, nome: string) => {
+    setMaterials(prev => {
+      const copy = [...prev];
+      const matched = insumosCadastrados.find(
+        i => i.nome.trim().toLowerCase() === nome.trim().toLowerCase()
+      );
+      copy[idx] = {
+        ...copy[idx],
+        nome,
+        insumo_id: matched ? matched.id : undefined,
+        ...(matched ? {
+          preco_embalagem_atual: Number(matched.preco_embalagem_atual || 0),
+          quantidade_rendimento: Number(matched.quantidade_rendimento || matched.quantidade_embalagem || 1),
+          quantidade_embalagem: Number(matched.quantidade_embalagem || 1)
+        } : {})
+      };
+      return copy;
+    });
+  };
+
+  const handleClearMaterial = (idx: number) => {
+    setMaterials(prev => {
+      const copy = [...prev];
+      copy[idx] = {
+        ...copy[idx],
+        nome: '',
+        insumo_id: undefined,
+        preco_embalagem_atual: 0,
+        quantidade_rendimento: 1
+      };
       return copy;
     });
   };
@@ -920,7 +1261,12 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
               )}
 
               <div className={styles.explanationBox}>
-                <strong>Como funciona o cálculo de cada insumo:</strong><br />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                  <strong>Como funciona o cálculo de cada insumo:</strong>
+                  <span style={{ fontSize: '11px', color: 'hsl(var(--primary))', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Package size={13} /> {insumosCadastrados.length} produtos do estoque disponíveis
+                  </span>
+                </div>
                 Valor por Consulta = (Preço da Embalagem ÷ Rendimento da Embalagem) × Quantidade Usada por Consulta.<br />
                 Valor Total = Valor por Consulta × Número de Consultas Necessárias.
               </div>
@@ -929,7 +1275,7 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                 <table className={styles.materialsTable}>
                   <thead>
                     <tr>
-                      <th style={{ minWidth: '200px' }}>Insumo / Material</th>
+                      <th style={{ minWidth: '280px', width: '32%' }}>Insumo / Material</th>
                       <th style={{ width: '95px', minWidth: '90px', textAlign: 'right' }} title="Quantas doses ou consultas rende a embalagem inteira">Rendimento</th>
                       <th style={{ width: '110px', minWidth: '105px', textAlign: 'right' }} title="Preço total pago na compra da embalagem">Preço Emb. (R$)</th>
                       <th style={{ width: '95px', minWidth: '90px', textAlign: 'right' }} title="Quantidade gasta em cada consulta">Qtd. Uso</th>
@@ -962,12 +1308,14 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                         return (
                           <tr key={idx}>
                             <td>
-                              <input 
-                                type="text"
-                                className={styles.tableInput}
-                                placeholder="Nome do material..."
-                                value={m.nome}
-                                onChange={(e) => handleMaterialChange(idx, 'nome', e.target.value)}
+                              <InsumoCombobox
+                                nome={m.nome}
+                                insumoId={m.insumo_id}
+                                insumos={insumosCadastrados}
+                                openUpwards={materials.length > 2 && idx >= materials.length - 1}
+                                onSelectStock={(ins) => handleSelectInsumoFromStock(idx, ins)}
+                                onChangeCustom={(nome) => handleCustomMaterialName(idx, nome)}
+                                onClear={() => handleClearMaterial(idx)}
                               />
                             </td>
                             <td>
