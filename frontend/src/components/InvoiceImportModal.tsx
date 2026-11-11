@@ -608,7 +608,7 @@ export default function InvoiceImportModal({
                 </div>
                 <div className={styles.invoiceMetaItem}>
                   <span className={styles.metaLabel}>Valor Total da Nota</span>
-                  <span className={styles.metaValue} style={{ color: 'hsl(142 70% 55%)' }}>
+                  <span className={styles.metaValue} style={{ color: 'hsl(var(--success))', fontSize: '16px' }}>
                     {invoiceData.valor_total_nota.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
                 </div>
@@ -665,17 +665,17 @@ export default function InvoiceImportModal({
                             onChange={(e) => handleToggleSelectAll(e.target.checked)}
                           />
                         </th>
-                        <th style={{ minWidth: '240px' }}>Descrição do Produto (Editável)</th>
-                        <th style={{ minWidth: '180px' }}>Vínculo no Catálogo</th>
-                        <th style={{ minWidth: '80px' }}>Qtd Nota</th>
-                        <th style={{ minWidth: '70px' }}>Un. Nota</th>
-                        <th style={{ minWidth: '100px' }}>Itens p/ Caixa</th>
-                        <th style={{ minWidth: '140px' }}>Modo de Entrada</th>
-                        <th style={{ minWidth: '110px' }}>Saldo a Entrar</th>
-                        <th style={{ minWidth: '95px' }}>Valor Unit.</th>
-                        <th style={{ minWidth: '95px' }}>Valor Total</th>
-                        <th style={{ minWidth: '120px' }}>Categoria</th>
-                        <th style={{ width: '40px' }}></th>
+                        <th style={{ minWidth: '280px' }}>Descrição do Produto (Editável)</th>
+                        <th style={{ minWidth: '220px' }}>Vínculo no Catálogo</th>
+                        <th style={{ minWidth: '85px', textAlign: 'center' }}>Qtd Nota</th>
+                        <th style={{ minWidth: '75px', textAlign: 'center' }}>Un. Nota</th>
+                        <th style={{ minWidth: '95px', textAlign: 'center' }}>Itens p/ Caixa</th>
+                        <th style={{ minWidth: '130px', textAlign: 'center' }}>Modo de Entrada</th>
+                        <th style={{ minWidth: '120px' }}>Saldo a Entrar</th>
+                        <th style={{ minWidth: '100px', textAlign: 'right' }}>Valor Unit.</th>
+                        <th style={{ minWidth: '100px', textAlign: 'right' }}>Valor Total</th>
+                        <th style={{ minWidth: '130px' }}>Categoria</th>
+                        <th style={{ width: '45px', textAlign: 'center' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -741,32 +741,32 @@ export default function InvoiceImportModal({
                               </div>
                             )}
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <input 
                               type="number" 
                               step="0.01"
                               className={styles.cellInput}
-                              style={{ width: '70px', textAlign: 'center' }}
+                              style={{ width: '80px', textAlign: 'center' }}
                               value={item.quantidade_nota}
                               onChange={(e) => handleUpdateItem(item.id, { quantidade_nota: Number(e.target.value) })}
                             />
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <span className={styles.badgeUnit}>{item.unidade_nota}</span>
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <input 
                               type="number" 
                               step="1"
                               min="1"
                               className={styles.cellInput}
-                              style={{ width: '75px', textAlign: 'center' }}
+                              style={{ width: '80px', textAlign: 'center' }}
                               value={item.fator_conversao}
                               onChange={(e) => handleUpdateItem(item.id, { fator_conversao: Number(e.target.value) })}
                               title="Quantidade de unidades contidas nesta embalagem (ex: 40 para C/40)"
                             />
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <button 
                               type="button" 
                               className={`${styles.modeToggleBtn} ${item.modo_entrada === 'unidade' ? styles.modeUnit : styles.modeBox}`}
@@ -790,16 +790,16 @@ export default function InvoiceImportModal({
                             <div className={styles.badgeHighlight}>
                               +{item.quantidade_entrada} {item.modo_entrada === 'unidade' ? item.unidade_estoque : item.unidade_nota}
                             </div>
-                            <div style={{ fontSize: '10px', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>
+                            <div style={{ fontSize: '11px', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>
                               Custo: R$ {item.custo_unitario_entrada.toFixed(2)}/un
                             </div>
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'right' }}>
                             <input 
                               type="number" 
                               step="0.01"
                               className={styles.cellInput}
-                              style={{ width: '85px', textAlign: 'right' }}
+                              style={{ width: '95px', textAlign: 'right' }}
                               value={item.valor_unitario}
                               onChange={(e) => {
                                 const vu = Number(e.target.value);
@@ -808,12 +808,12 @@ export default function InvoiceImportModal({
                               }}
                             />
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'right' }}>
                             <input 
                               type="number" 
                               step="0.01"
                               className={styles.cellInput}
-                              style={{ width: '85px', textAlign: 'right' }}
+                              style={{ width: '95px', textAlign: 'right' }}
                               value={item.valor_total}
                               onChange={(e) => {
                                 const vt = Number(e.target.value);
@@ -825,6 +825,7 @@ export default function InvoiceImportModal({
                           <td>
                             <select 
                               className={styles.cellSelect}
+                              style={{ width: '100%' }}
                               value={item.categoria}
                               onChange={(e) => handleUpdateItem(item.id, { categoria: e.target.value })}
                             >

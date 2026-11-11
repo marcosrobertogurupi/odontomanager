@@ -794,6 +794,12 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                       setIsNewProcModalOpen(true);
                     } else if (e.target.value) {
                       selectProcedureForPricing(e.target.value);
+                    } else {
+                      setSelectedProcedureId('');
+                      setProcedureName('');
+                      setProcedureCategory('Geral');
+                      setProcedurePricePracticed(0);
+                      setMaterials([]);
                     }
                   }}
                 >
@@ -828,12 +834,90 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
               <div className={styles.cardHeader}>
                 <div className={styles.cardTitle}>
                   <Layers size={18} color="hsl(var(--primary))" />
-                  <span>Ficha Técnica de Materiais do Procedimento</span>
+                  <span>
+                    {procedureName ? `Ficha Técnica: ${procedureName}` : 'Ficha Técnica de Materiais do Procedimento'}
+                  </span>
                 </div>
                 <span className={styles.badgeTemplate}>
                   {materials.length} {materials.length === 1 ? 'material' : 'materiais'}
                 </span>
               </div>
+
+              {/* TÍTULO DESTACADO DO PROCEDIMENTO ESCOLHIDO ACIMA DOS ITENS */}
+              {procedureName ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  backgroundColor: 'hsl(var(--primary) / 0.08)',
+                  border: '1.5px solid hsl(var(--primary) / 0.25)',
+                  borderRadius: 'var(--radius-sm)',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '8px',
+                      backgroundColor: 'hsl(var(--primary))',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 6px hsl(var(--primary) / 0.25)',
+                      flexShrink: 0
+                    }}>
+                      <Layers size={20} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, color: 'hsl(var(--primary))', display: 'block' }}>
+                        Procedimento Selecionado
+                      </span>
+                      <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'hsl(var(--text-main))', lineHeight: 1.2 }}>
+                        {procedureName}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {procedureCategory && (
+                      <span className={styles.badgeTemplate} style={{ fontSize: '12px', fontWeight: 600 }}>
+                        {procedureCategory}
+                      </span>
+                    )}
+                    {procedurePricePracticed > 0 && (
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        backgroundColor: 'hsl(var(--bg-card))',
+                        border: '1px solid hsl(var(--border-color))',
+                        color: 'hsl(var(--text-main))'
+                      }}>
+                        Praticado: R$ {procedurePricePracticed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  backgroundColor: 'hsl(var(--bg-app))',
+                  border: '1px dashed hsl(var(--border-color))',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'hsl(var(--text-muted))',
+                  fontSize: '13px'
+                }}>
+                  <AlertTriangle size={18} style={{ flexShrink: 0, color: 'hsl(var(--warning, #eab308))' }} />
+                  <span>Selecione um procedimento acima para incluir os itens da ficha técnica.</span>
+                </div>
+              )}
 
               <div className={styles.explanationBox}>
                 <strong>Como funciona o cálculo de cada insumo:</strong><br />
@@ -859,7 +943,11 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
                     {materials.length === 0 ? (
                       <tr>
                         <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: 'hsl(var(--text-muted))' }}>
-                          Nenhum insumo adicionado ainda. Clique no botão abaixo para adicionar ou carregue um modelo da planilha.
+                          {procedureName ? (
+                            <>Nenhum insumo incluído para <strong>{procedureName}</strong> ainda. Clique em <strong>"Adicionar Material"</strong> abaixo para incluir os itens.</>
+                          ) : (
+                            <>Selecione um procedimento acima e clique em <strong>"Adicionar Material"</strong> para incluir os itens.</>
+                          )}
                         </td>
                       </tr>
                     ) : (
