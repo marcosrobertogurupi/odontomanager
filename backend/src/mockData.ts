@@ -32,15 +32,24 @@ export interface Procedure {
 
 export interface Appointment {
   id: string;
-  patient_id: string;
+  patient_id?: string | null;
   professional_id: string;
   unit_id: string;
   start_time: string;
   end_time: string;
   status: 'scheduled' | 'confirmed' | 'canceled' | 'missed';
-  room: string;
+  room?: string | null;
   notes?: string;
   procedure_id?: string | null;
+  event_type?: 'clinic' | 'personal';
+  title?: string | null;
+  color?: string;
+  whatsapp_notify?: boolean;
+  whatsapp_reminder_minutes?: number;
+  whatsapp_phone?: string | null;
+  whatsapp_reminder_sent?: boolean;
+  whatsapp_reminder_sent_at?: string | null;
+  whatsapp_custom_message?: string | null;
   patient?: Patient;
   professional?: Profile;
 }

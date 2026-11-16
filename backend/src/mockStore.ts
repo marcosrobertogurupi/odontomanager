@@ -87,6 +87,16 @@ class MockStore {
     }
     return null;
   }
+  deleteAppointment(id: string) {
+    const idx = this.appointments.findIndex(a => a.id === id);
+    if (idx !== -1) {
+      const removed = this.appointments[idx];
+      this.appointments.splice(idx, 1);
+      this.clinicFlow = this.clinicFlow.filter(f => f.appointment_id !== id);
+      return removed;
+    }
+    return null;
+  }
 
   getClinicFlow() {
     return this.clinicFlow.map(flow => {
