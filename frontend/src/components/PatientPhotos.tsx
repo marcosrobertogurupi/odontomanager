@@ -28,6 +28,7 @@ import {
   analyzePhoto,
   listPhotoAnalyses,
   ratePhotoAnalysis,
+  revisePhotoAnalysis,
   type PhotoAnalysis,
 } from '../lib/photoAnalysis';
 import styles from './PatientPhotos.module.css';
@@ -70,6 +71,9 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [analyses, setAnalyses] = useState<PhotoAnalysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisErrors, setAnalysisErrors] = useState<string[]>([]);
+  const [revisingId, setRevisingId] = useState<string | null>(null);
+  const [revisionDraft, setRevisionDraft] = useState('');
+  const [savingRevision, setSavingRevision] = useState(false);
   const showAnalysisPanel = analyzing || analyses.length > 0 || analysisErrors.length > 0;
   const viewerIdRef = useRef<string | null>(null);
   viewerIdRef.current = viewerId;
@@ -131,6 +135,31 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
       );
     } catch (err: any) {
       alert('Erro ao salvar a avaliação: ' + err.message);
+    }
+  };
+
+  const startRevision = (a: PhotoAnalysis) => {
+    setRevisingId(a.id);
+    setRevisionDraft(a.revised_summary ?? a.summary);
+  };
+
+  // O dentista corrige o texto da IA. O original fica guardado; a diferença entre os dois mede o acerto.
+  const saveRevision = async (a: PhotoAnalysis, text: string) => {
+    setSavingRevision(true);
+    try {
+      const { revised } = await revisePhotoAnalysis(a.id, text);
+      setAnalyses((prev) =>
+        prev.map((x) =>
+          x.id === a.id
+            ? { ...x, revised_summary: revised ? text.trim() : null, revised_at: revised ? new Date().toISOString() : null }
+            : x
+        )
+      );
+      setRevisingId(null);
+    } catch (err: any) {
+      alert('Erro ao salvar a correção: ' + err.message);
+    } finally {
+      setSavingRevision(false);
     }
   };
 
@@ -483,7 +512,56 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                         </span>
                       )}
                     </div>
-                    <p className={styles.aiText}>{a.summary}</p>
+                    {revisingId === a.id ? (
+                      <div className={styles.reviseArea}>
+                        <textarea
+                          className={styles.reviseText}
+                          value={revisionDraft}
+                          maxLength={4000}
+                          rows={7}
+                          onChange={(e) => setRevisionDraft(e.target.value)}
+                        />
+                        <div className={styles.reviseActions}>
+                          <button
+                            type="button"
+                            className={styles.uploadBtn}
+                            disabled={savingRevision}
+                            onClick={() => saveRevision(a, revisionDraft)}
+                          >
+                            {savingRevision ? 'Salvando...' : 'Salvar correção'}
+                          </button>
+                          <button type="button" className={styles.ghostBtn} onClick={() => setRevisingId(null)}>
+                            Cancelar
+                          </button>
+                          {a.revised_summary && (
+                            <button
+                              type="button"
+                              className={`${styles.ghostBtn} ${styles.danger}`}
+                              disabled={savingRevision}
+                              onClick={() => saveRevision(a, '')}
+                            >
+                              Desfazer correção
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {a.revised_summary && <span className={styles.revisedBadge}>Revisado pelo dentista</span>}
+                        <p className={styles.aiText}>{a.revised_summary ?? a.summary}</p>
+                        {a.revised_summary && (
+                          <details className={styles.originalDetails}>
+                            <summary>Ver texto original da IA</summary>
+                            <p className={styles.aiText}>{a.summary}</p>
+                          </details>
+                        )}
+                        {canAnalyze && (
+                          <button type="button" className={styles.reviseBtn} onClick={() => startRevision(a)}>
+                            <Pencil size={12} /> {a.revised_summary ? 'Editar correção' : 'Corrigir texto'}
+                          </button>
+                        )}
+                      </>
+                    )}
                     {canAnalyze && (
                       <input
                         type="text"

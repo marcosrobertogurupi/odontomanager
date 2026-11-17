@@ -40,6 +40,10 @@ const TIPO_DO_REGISTRO: Record<string, string> = {
   outra: 'imagem clínica',
 }
 
+// Versão das instruções abaixo. SEMPRE aumente (v2, v3...) ao mexer em SYSTEM_PROMPT: cada análise
+// grava a versão usada e o relatório photo_ai_quality_report compara a qualidade entre versões.
+const PROMPT_VERSION = 'v1'
+
 const SYSTEM_PROMPT = `Você é um assistente de apoio a cirurgiões-dentistas. Você recebe uma imagem de um paciente (radiografia ou foto clínica) e escreve um resumo curto, objetivo e em português do Brasil para o dentista revisar.
 
 Regras:
@@ -238,6 +242,7 @@ async function analisar(db: Db, admin: Db, userId: string, body: Record<string, 
         photo_id: foto.id,
         model: cfg.modelos[i],
         label: rotulo(i),
+        prompt_version: PROMPT_VERSION,
         summary: r.value.summary,
         prompt_tokens: r.value.prompt_tokens,
         completion_tokens: r.value.completion_tokens,
@@ -286,6 +291,30 @@ async function avaliar(db: Db, admin: Db, userId: string, body: Record<string, u
   return { success: true }
 }
 
+// O dentista corrige o texto da IA. O original (summary) nunca é alterado: a diferença entre os dois
+// é o sinal de acerto usado no relatório. Texto vazio desfaz a correção.
+async function revisar(db: Db, admin: Db, userId: string, body: Record<string, unknown>) {
+  const id = uuid(body.id, 'Análise inválida.')
+  if (typeof body.text !== 'string') throw new HttpError(400, 'Texto inválido.')
+  const texto = body.text.trim()
+  if (texto.length > 4000) throw new HttpError(400, 'Texto grande demais (máximo 4000 caracteres).')
+
+  const { data: analise, error } = await db.from('photo_ai_analyses').select('id, tenant_id, summary').eq('id', id).maybeSingle()
+  if (error) throw error
+  if (!analise) throw new HttpError(404, 'Análise não encontrada.')
+  await exigirPapel(db, analise.tenant_id, userId)
+
+  // Salvar exatamente o texto original não é correção: tratamos como desfazer.
+  const limpar = texto === '' || texto === analise.summary.trim()
+  const { error: updError } = await admin.from('photo_ai_analyses').update(
+    limpar
+      ? { revised_summary: null, revised_at: null, revised_by: null }
+      : { revised_summary: texto, revised_at: new Date().toISOString(), revised_by: userId },
+  ).eq('id', id)
+  if (updError) throw updError
+  return { success: true, revised: !limpar }
+}
+
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -311,6 +340,7 @@ Deno.serve(async (req) => {
     switch (body?.action) {
       case 'analyze': return json(await analisar(db, admin, user.id, body), 201)
       case 'rate': return json(await avaliar(db, admin, user.id, body))
+      case 'revise': return json(await revisar(db, admin, user.id, body))
       default: throw new HttpError(400, 'Ação inválida.')
     }
   } catch (e) {

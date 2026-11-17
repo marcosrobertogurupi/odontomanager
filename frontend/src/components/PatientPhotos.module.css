@@ -627,3 +627,76 @@
 .noteInput:focus {
   border-color: hsl(var(--primary));
 }
+
+/* Correção do texto da IA pelo dentista */
+.revisedBadge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  color: hsl(var(--success));
+  background: hsl(var(--success-light));
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+}
+
+.originalDetails {
+  font-size: 13px;
+  color: hsl(var(--text-muted));
+}
+
+.originalDetails summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.originalDetails .aiText {
+  margin-top: 6px;
+  color: hsl(var(--text-muted));
+}
+
+.reviseBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  cursor: pointer;
+}
+
+.reviseBtn:hover {
+  text-decoration: underline;
+}
+
+.reviseArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reviseText {
+  width: 100%;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  background-color: hsl(var(--bg-app));
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.reviseText:focus {
+  border-color: hsl(var(--primary));
+}
+
+.reviseActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
