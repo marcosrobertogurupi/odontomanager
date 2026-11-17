@@ -71,6 +71,7 @@ const WEEKDAY_SHORT = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const MINI_WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_HEIGHT = 64; // 64px por hora -> 1536px por 24h
+const BUSINESS_START_HOUR = 8; // horário comercial: a grade abre rolada em 08:00
 
 function toLocalDateStr(d: Date): string {
   const year = d.getFullYear();
@@ -175,13 +176,23 @@ export default function Appointments({ selectedUnit }: AppointmentsProps) {
     return () => clearInterval(timer);
   }, []);
 
-  // Posicionar scroll vertical inicialmente às 07:30 da manhã
+  // Posicionar o scroll vertical da grade no início do expediente (08:00).
+  // Roda a cada render até a grade ter overflow real (layout pronto) e então
+  // aplica uma única vez por visualização — evita ficar às 01:00 quando o
+  // layout ainda não estava medido no primeiro efeito.
+  const initialScrollDoneRef = useRef(false);
   useEffect(() => {
-    if (timeGridScrollRef.current && (viewMode === 'week' || viewMode === 'day')) {
-      const targetScroll = Math.max(0, 7.5 * HOUR_HEIGHT - 20);
-      timeGridScrollRef.current.scrollTop = targetScroll;
+    if (viewMode !== 'week' && viewMode !== 'day') {
+      initialScrollDoneRef.current = false;
+      return;
     }
-  }, [viewMode]);
+    const el = timeGridScrollRef.current;
+    if (!el || initialScrollDoneRef.current) return;
+    if (el.scrollHeight <= el.clientHeight) return;
+    // -12px para o rótulo "08:00" (centrado na linha) não ficar cortado no topo
+    el.scrollTop = BUSINESS_START_HOUR * HOUR_HEIGHT - 12;
+    initialScrollDoneRef.current = true;
+  });
 
   // 1. Carregar Profissionais, Pacientes e Procedimentos
   const loadDependencies = useCallback(async () => {
