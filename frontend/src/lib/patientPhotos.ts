@@ -94,8 +94,8 @@ export async function resizePhoto(file: File): Promise<Record<SizeName, Blob>> {
 }
 
 // Mensagem de erro amigável vinda da Edge Function (corpo JSON { error }).
-async function invoke<T>(body: BodyInit | Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('patient-photos', { body: body as never });
+export async function invokeEdge<T>(fn: string, body: BodyInit | Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(fn, { body: body as never });
   if (error) {
     let message = 'Não foi possível concluir a operação com as fotos.';
     const ctx = (error as { context?: Response }).context;
@@ -113,6 +113,8 @@ async function invoke<T>(body: BodyInit | Record<string, unknown>): Promise<T> {
   }
   return data as T;
 }
+
+const invoke = <T>(body: BodyInit | Record<string, unknown>) => invokeEdge<T>('patient-photos', body);
 
 export async function listPatientPhotos(patientId: string): Promise<PatientPhoto[]> {
   const res = await invoke<{ fotos: PatientPhoto[] }>({ action: 'list', patient_id: patientId });

@@ -496,3 +496,134 @@
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
+
+/* Análise por IA (sob demanda) */
+.aiBtn {
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+.aiBtn:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.aiBtn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.lightboxImgSmall {
+  max-height: calc(100vh - 170px - 34vh - 12px);
+}
+
+.analysisPanel {
+  background: hsl(var(--bg-card));
+  border-radius: var(--radius-xs);
+  padding: 12px 16px;
+  max-height: 34vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.aiDisclaimer {
+  font-size: 12px;
+  color: hsl(var(--warning));
+  background: hsl(var(--warning-light));
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0;
+}
+
+.aiLoading {
+  font-size: 13px;
+  color: hsl(var(--text-muted));
+  margin: 0;
+}
+
+.aiError {
+  font-size: 13px;
+  color: hsl(var(--danger));
+  background: hsl(var(--danger-light));
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0;
+}
+
+.analysisItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid hsl(var(--border-color));
+}
+
+.analysisHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.aiLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: hsl(var(--primary));
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+}
+
+.aiDate {
+  font-size: 12px;
+  color: hsl(var(--text-muted));
+}
+
+.stars {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.starBtn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: hsl(var(--border-color));
+  line-height: 0;
+}
+
+.starBtn:hover {
+  color: hsl(var(--warning));
+}
+
+.starOn {
+  color: hsl(var(--warning));
+}
+
+.starOn svg {
+  fill: currentColor;
+}
+
+.aiText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: hsl(var(--text-main));
+  white-space: pre-wrap;
+}
+
+.noteInput {
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-xs);
+  padding: 8px 12px;
+  background-color: hsl(var(--bg-app));
+  font-size: 13px;
+  outline: none;
+}
+
+.noteInput:focus {
+  border-color: hsl(var(--primary));
+}

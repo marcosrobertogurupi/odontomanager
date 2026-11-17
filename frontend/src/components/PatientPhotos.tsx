@@ -10,6 +10,8 @@ import {
   Check,
   Pencil,
   Camera,
+  Sparkles,
+  Star,
 } from 'lucide-react';
 import { useTenant } from '../contexts/TenantContext';
 import { formatDate } from '../lib/formatters';
@@ -22,6 +24,12 @@ import {
   type PatientPhoto,
   type PhotoCategory,
 } from '../lib/patientPhotos';
+import {
+  analyzePhoto,
+  listPhotoAnalyses,
+  ratePhotoAnalysis,
+  type PhotoAnalysis,
+} from '../lib/photoAnalysis';
 import styles from './PatientPhotos.module.css';
 
 interface PatientPhotosProps {
@@ -33,7 +41,7 @@ const categoryLabel = (c: PhotoCategory) => PHOTO_CATEGORIES.find((x) => x.value
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD no fuso local
 
 export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
-  const { isReadOnly } = useTenant();
+  const { isReadOnly, role } = useTenant();
   const [photos, setPhotos] = useState<PatientPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,6 +64,75 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [comparing, setComparing] = useState(false);
+
+  // Análise por IA: só roda quando o dentista clica no botão (cada clique tem custo).
+  const canAnalyze = !isReadOnly && ['clinic_owner', 'dentist', 'super_admin'].includes(role || '');
+  const [analyses, setAnalyses] = useState<PhotoAnalysis[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisErrors, setAnalysisErrors] = useState<string[]>([]);
+  const showAnalysisPanel = analyzing || analyses.length > 0 || analysisErrors.length > 0;
+  const viewerIdRef = useRef<string | null>(null);
+  viewerIdRef.current = viewerId;
+
+  useEffect(() => {
+    setAnalyses([]);
+    setAnalysisErrors([]);
+    if (!viewerId) return;
+    let cancelled = false;
+    listPhotoAnalyses(viewerId)
+      .then((list) => {
+        if (!cancelled) setAnalyses(list);
+      })
+      .catch(() => {
+        /* sem análises ou tabela indisponível: o painel simplesmente não aparece */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId]);
+
+  const handleAnalyze = async (p: PatientPhoto) => {
+    if (
+      analyses.length > 0 &&
+      !confirm('Esta foto já tem análise. Analisar de novo gera um novo custo de IA. Continuar?')
+    ) {
+      return;
+    }
+    setAnalyzing(true);
+    setAnalysisErrors([]);
+    try {
+      const res = await analyzePhoto(p.id);
+      const failures = res.errors.map((e) => `${e.label ?? 'IA'}: ${e.error}`);
+      const list = await listPhotoAnalyses(p.id);
+      if (viewerIdRef.current === p.id) {
+        setAnalysisErrors(failures);
+        setAnalyses(list);
+      }
+    } catch (err: any) {
+      if (viewerIdRef.current === p.id) setAnalysisErrors([err.message || 'Erro ao analisar a imagem.']);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleRate = async (a: PhotoAnalysis, changes: { rating?: number; note?: string }) => {
+    try {
+      await ratePhotoAnalysis(a.id, changes);
+      setAnalyses((prev) =>
+        prev.map((x) =>
+          x.id === a.id
+            ? {
+                ...x,
+                rating: changes.rating ?? x.rating,
+                rating_note: changes.note !== undefined ? changes.note.trim() || null : x.rating_note,
+              }
+            : x
+        )
+      );
+    } catch (err: any) {
+      alert('Erro ao salvar a avaliação: ' + err.message);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -122,11 +199,14 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   useEffect(() => {
     if (!viewerPhoto && !comparing) return;
     const onKey = (e: KeyboardEvent) => {
+      // Digitando (descrição, observação do dentista): as setas movem o cursor, não trocam de foto.
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       if (e.key === 'Escape') {
         setViewerId(null);
         setComparing(false);
-      } else if (viewerPhoto && !editing && e.key === 'ArrowLeft') step(-1);
-      else if (viewerPhoto && !editing && e.key === 'ArrowRight') step(1);
+      } else if (viewerPhoto && !editing && !typing && e.key === 'ArrowLeft') step(-1);
+      else if (viewerPhoto && !editing && !typing && e.key === 'ArrowRight') step(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -311,7 +391,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                 </button>
               </>
             )}
-            <img className={styles.lightboxImg} src={viewerPhoto.urls.grande} alt={viewerPhoto.caption || categoryLabel(viewerPhoto.category)} />
+            <img className={`${styles.lightboxImg} ${showAnalysisPanel ? styles.lightboxImgSmall : ''}`} src={viewerPhoto.urls.grande} alt={viewerPhoto.caption || categoryLabel(viewerPhoto.category)} />
             <div className={styles.lightboxBar}>
               {editing ? (
                 <div className={styles.editRow}>
@@ -349,6 +429,16 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                   </div>
                   {!isReadOnly && (
                     <div className={styles.lightboxActions}>
+                      {canAnalyze && (
+                        <button
+                          className={`${styles.ghostBtn} ${styles.aiBtn}`}
+                          onClick={() => handleAnalyze(viewerPhoto)}
+                          disabled={analyzing}
+                        >
+                          <Sparkles size={14} />{' '}
+                          {analyzing ? 'Analisando...' : analyses.length > 0 ? 'Analisar novamente' : 'Analisar foto/radiografia'}
+                        </button>
+                      )}
                       <button className={styles.ghostBtn} onClick={() => startEdit(viewerPhoto)}>
                         <Pencil size={14} /> Editar
                       </button>
@@ -360,6 +450,56 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                 </>
               )}
             </div>
+            {showAnalysisPanel && (
+              <div className={styles.analysisPanel}>
+                <p className={styles.aiDisclaimer}>
+                  Descrição gerada por IA como apoio à avaliação. Não é laudo nem diagnóstico: confirme sempre com a
+                  avaliação clínica do dentista.
+                </p>
+                {analyzing && <p className={styles.aiLoading}>Analisando a imagem... pode levar até 1 minuto.</p>}
+                {analysisErrors.map((m) => (
+                  <p key={m} className={styles.aiError}>
+                    {m}
+                  </p>
+                ))}
+                {analyses.map((a) => (
+                  <div key={a.id} className={styles.analysisItem}>
+                    <div className={styles.analysisHead}>
+                      {a.label && <span className={styles.aiLabel}>{a.label}</span>}
+                      <span className={styles.aiDate}>{new Date(a.created_at).toLocaleString('pt-BR')}</span>
+                      {canAnalyze && (
+                        <span className={styles.stars} role="group" aria-label="Nota do dentista">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              className={`${styles.starBtn} ${a.rating && n <= a.rating ? styles.starOn : ''}`}
+                              onClick={() => handleRate(a, { rating: n })}
+                              aria-label={`Nota ${n}`}
+                            >
+                              <Star size={16} />
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    <p className={styles.aiText}>{a.summary}</p>
+                    {canAnalyze && (
+                      <input
+                        type="text"
+                        className={styles.noteInput}
+                        defaultValue={a.rating_note ?? ''}
+                        maxLength={300}
+                        placeholder="Observação do dentista (ex.: não percebeu a lesão no dente 36)"
+                        onBlur={(e) => {
+                          if (e.target.value.trim() !== (a.rating_note ?? '')) handleRate(a, { note: e.target.value });
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
