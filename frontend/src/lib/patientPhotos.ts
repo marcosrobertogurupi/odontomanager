@@ -4,18 +4,35 @@ import { supabase } from './supabaseClient';
 // Edge Function `patient-photos`. O navegador reduz a foto em 3 tamanhos antes de enviar, igual ao
 // que o LojaCarros faz com as fotos dos carros.
 
-export type PhotoCategory = 'radiografia' | 'antes' | 'depois' | 'outra';
+export type PhotoCategory = 'radiografia' | 'antes' | 'durante' | 'depois' | 'outra';
 
 export const PHOTO_CATEGORIES: { value: PhotoCategory; label: string }[] = [
   { value: 'radiografia', label: 'Radiografia' },
   { value: 'antes', label: 'Antes' },
+  { value: 'durante', label: 'Durante' },
   { value: 'depois', label: 'Depois' },
   { value: 'outra', label: 'Outra' },
 ];
 
+export type CaseStatus = 'em_andamento' | 'concluido';
+
+export interface PatientCase {
+  id: string;
+  patient_id: string;
+  title: string;
+  tooth: string | null;
+  status: CaseStatus;
+  opened_on: string;
+  closed_on: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface PatientPhoto {
   id: string;
   category: PhotoCategory;
+  /** Caso a que a foto pertence; null = "Sem caso". */
+  case_id: string | null;
   caption: string | null;
   taken_on: string;
   created_at: string;
@@ -124,12 +141,13 @@ export async function listPatientPhotos(patientId: string): Promise<PatientPhoto
 export async function uploadPatientPhoto(
   patientId: string,
   file: File,
-  meta: { category: PhotoCategory; caption: string; takenOn: string }
+  meta: { category: PhotoCategory; caption: string; takenOn: string; caseId?: string | null }
 ): Promise<void> {
   const sizes = await resizePhoto(file);
   const form = new FormData();
   form.append('action', 'upload');
   form.append('patient_id', patientId);
+  if (meta.caseId) form.append('case_id', meta.caseId);
   form.append('category', meta.category);
   form.append('caption', meta.caption);
   form.append('taken_on', meta.takenOn);
@@ -139,7 +157,7 @@ export async function uploadPatientPhoto(
 
 export async function updatePatientPhoto(
   id: string,
-  changes: { category?: PhotoCategory; caption?: string; taken_on?: string }
+  changes: { category?: PhotoCategory; caption?: string; taken_on?: string; case_id?: string | null }
 ): Promise<void> {
   await invoke({ action: 'update', id, ...changes });
 }
@@ -157,4 +175,75 @@ export async function purgePatientPhotos(patientId: string): Promise<void> {
     if (/function was not found/i.test(err?.message || '')) return;
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Casos clínicos: só metadados (sem arquivos), então vão direto ao banco com o RLS por clínica.
+// ---------------------------------------------------------------------------
+const CASE_COLUMNS = 'id, patient_id, title, tooth, status, opened_on, closed_on, notes, created_at';
+
+export async function listPatientCases(patientId: string): Promise<PatientCase[]> {
+  const { data, error } = await supabase
+    .from('patient_cases')
+    .select(CASE_COLUMNS)
+    .eq('patient_id', patientId)
+    .order('opened_on', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message || 'Não foi possível carregar os casos.');
+  return (data ?? []) as PatientCase[];
+}
+
+export interface CaseInput {
+  title: string;
+  tooth?: string;
+  notes?: string;
+  openedOn?: string;
+}
+
+export async function createPatientCase(patientId: string, input: CaseInput): Promise<PatientCase> {
+  // O tenant vem do cadastro do paciente (o RLS esconde pacientes de outras clínicas).
+  const { data: patient, error: pErr } = await supabase
+    .from('patients')
+    .select('tenant_id')
+    .eq('id', patientId)
+    .maybeSingle();
+  if (pErr || !patient) throw new Error('Paciente não encontrado.');
+  const { data: auth } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from('patient_cases')
+    .insert({
+      tenant_id: patient.tenant_id,
+      patient_id: patientId,
+      title: input.title.trim(),
+      tooth: input.tooth?.trim() || null,
+      notes: input.notes?.trim() || null,
+      ...(input.openedOn ? { opened_on: input.openedOn } : {}),
+      created_by: auth.user?.id ?? null,
+    })
+    .select(CASE_COLUMNS)
+    .single();
+  if (error) throw new Error(error.message || 'Não foi possível criar o caso.');
+  return data as PatientCase;
+}
+
+export async function updatePatientCase(
+  id: string,
+  changes: { title?: string; tooth?: string | null; notes?: string | null; status?: CaseStatus }
+): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (changes.title !== undefined) update.title = changes.title.trim();
+  if (changes.tooth !== undefined) update.tooth = changes.tooth?.trim() || null;
+  if (changes.notes !== undefined) update.notes = changes.notes?.trim() || null;
+  if (changes.status !== undefined) {
+    update.status = changes.status;
+    update.closed_on = changes.status === 'concluido' ? new Date().toLocaleDateString('en-CA') : null;
+  }
+  const { error } = await supabase.from('patient_cases').update(update).eq('id', id);
+  if (error) throw new Error(error.message || 'Não foi possível salvar o caso.');
+}
+
+/** Exclui só o caso: as fotos dele NÃO são apagadas, voltam para "Sem caso" (FK ON DELETE SET NULL). */
+export async function deletePatientCase(id: string): Promise<void> {
+  const { error } = await supabase.from('patient_cases').delete().eq('id', id);
+  if (error) throw new Error(error.message || 'Não foi possível excluir o caso.');
 }

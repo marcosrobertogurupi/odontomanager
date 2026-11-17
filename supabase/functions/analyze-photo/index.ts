@@ -36,6 +36,7 @@ const TIPO_POR_EXT: Record<string, string> = { webp: 'image/webp', jpg: 'image/j
 const TIPO_DO_REGISTRO: Record<string, string> = {
   radiografia: 'radiografia',
   antes: 'foto clínica feita antes do tratamento',
+  durante: 'foto clínica feita durante o tratamento',
   depois: 'foto clínica feita depois do tratamento',
   outra: 'imagem clínica',
 }

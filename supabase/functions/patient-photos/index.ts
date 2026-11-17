@@ -25,7 +25,7 @@ const TAMANHOS = { grande: 3 * 1024 * 1024, media: 1024 * 1024, mini: 400 * 1024
 type Tamanho = keyof typeof TAMANHOS
 const NOMES_TAMANHO = Object.keys(TAMANHOS) as Tamanho[]
 const MAX_FOTOS_POR_PACIENTE = 200
-const CATEGORIAS = new Set(['radiografia', 'antes', 'depois', 'outra'])
+const CATEGORIAS = new Set(['radiografia', 'antes', 'durante', 'depois', 'outra'])
 const VALIDADE_LINK_SEG = 2 * 60 * 60
 
 class HttpError extends Error {
@@ -129,6 +129,16 @@ function validarDataISO(valor: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : valor
 }
 
+// case_id vazio/ausente = "Sem caso". Se vier, o caso precisa ser do mesmo paciente (RLS já filtra a clínica).
+async function casoDoPaciente(db: Db, patientId: string, caseId: unknown): Promise<string | null> {
+  if (caseId === undefined || caseId === null || caseId === '') return null
+  if (typeof caseId !== 'string' || !/^[0-9a-f-]{36}$/i.test(caseId)) throw new HttpError(400, 'Caso inválido.')
+  const { data, error } = await db.from('patient_cases').select('id').eq('id', caseId).eq('patient_id', patientId).maybeSingle()
+  if (error) throw error
+  if (!data) throw new HttpError(404, 'Caso não encontrado.')
+  return data.id as string
+}
+
 function limparLegenda(valor: unknown): string | null {
   if (typeof valor !== 'string') return null
   const t = valor.trim().slice(0, 200)
@@ -140,6 +150,7 @@ async function enviarFoto(db: Db, userId: string, form: FormData) {
 
   const category = String(form.get('category') ?? 'outra')
   if (!CATEGORIAS.has(category)) throw new HttpError(400, 'Categoria inválida.')
+  const caseId = await casoDoPaciente(db, paciente.id, form.get('case_id'))
 
   const { count } = await db.from('patient_photos').select('id', { count: 'exact', head: true }).eq('patient_id', paciente.id)
   if ((count ?? 0) >= MAX_FOTOS_POR_PACIENTE) {
@@ -169,6 +180,7 @@ async function enviarFoto(db: Db, userId: string, form: FormData) {
     const { data, error } = await db.from('patient_photos').insert({
       tenant_id: paciente.tenant_id,
       patient_id: paciente.id,
+      case_id: caseId,
       path,
       ext: fmt.ext,
       category,
@@ -191,7 +203,7 @@ async function listarFotos(db: Db, body: Record<string, unknown>) {
   const paciente = await pacienteDaClinica(db, body.patient_id)
   const { data, error } = await db
     .from('patient_photos')
-    .select('id, path, ext, category, caption, taken_on, created_at')
+    .select('id, path, ext, category, caption, taken_on, created_at, case_id')
     .eq('patient_id', paciente.id)
     .order('taken_on', { ascending: false })
     .order('created_at', { ascending: false })
@@ -207,6 +219,7 @@ async function listarFotos(db: Db, body: Record<string, unknown>) {
       return {
         id: f.id,
         category: f.category,
+        case_id: f.case_id,
         caption: f.caption,
         taken_on: f.taken_on,
         created_at: f.created_at,
@@ -229,8 +242,15 @@ async function atualizarFoto(db: Db, body: Record<string, unknown>) {
     if (!d) throw new HttpError(400, 'Data inválida.')
     update.taken_on = d
   }
-  if (Object.keys(update).length === 0) throw new HttpError(400, 'Nada para atualizar.')
   if (typeof body.id !== 'string') throw new HttpError(400, 'Foto inválida.')
+  if (body.case_id !== undefined) {
+    // Mover para outro caso (ou para "Sem caso" com null): o caso tem que ser do mesmo paciente da foto.
+    const { data: foto, error: fotoError } = await db.from('patient_photos').select('patient_id').eq('id', body.id).maybeSingle()
+    if (fotoError) throw fotoError
+    if (!foto) throw new HttpError(404, 'Foto não encontrada.')
+    update.case_id = await casoDoPaciente(db, foto.patient_id, body.case_id)
+  }
+  if (Object.keys(update).length === 0) throw new HttpError(400, 'Nada para atualizar.')
   const { data, error } = await db.from('patient_photos').update(update).eq('id', body.id).select('id')
   if (error) throw error
   if (!data?.length) throw new HttpError(404, 'Foto não encontrada.')

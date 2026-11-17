@@ -12,15 +12,24 @@ import {
   Camera,
   Sparkles,
   Star,
+  Plus,
+  FolderOpen,
+  CheckCircle2,
+  RotateCcw,
 } from 'lucide-react';
 import { useTenant } from '../contexts/TenantContext';
 import { formatDate } from '../lib/formatters';
 import {
   PHOTO_CATEGORIES,
+  createPatientCase,
+  deletePatientCase,
   deletePatientPhoto,
+  listPatientCases,
   listPatientPhotos,
+  updatePatientCase,
   updatePatientPhoto,
   uploadPatientPhoto,
+  type PatientCase,
   type PatientPhoto,
   type PhotoCategory,
 } from '../lib/patientPhotos';
@@ -40,6 +49,11 @@ interface PatientPhotosProps {
 
 const categoryLabel = (c: PhotoCategory) => PHOTO_CATEGORIES.find((x) => x.value === c)?.label ?? c;
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD no fuso local
+
+// Valor de `selectedCase` para o grupo de fotos que não pertencem a nenhum caso.
+const NO_CASE = 'sem-caso';
+// Capa do caso: a foto "Depois" mais recente; sem ela, a foto mais recente (a lista já vem da mais nova para a mais antiga).
+const coverOf = (list: PatientPhoto[]) => list.find((p) => p.category === 'depois') ?? list[0];
 
 // Uma linha por parágrafo; "Rótulo: texto" ganha o rótulo em negrito para a leitura ficar mais confortável.
 function renderAnalysisText(text: string) {
@@ -67,6 +81,20 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<PhotoCategory | 'todas'>('todas');
 
+  // Casos: null = lista de casos; NO_CASE = fotos sem caso; senão o id do caso aberto.
+  const [cases, setCases] = useState<PatientCase[]>([]);
+  const [selectedCase, setSelectedCase] = useState<string | null>(null);
+  const [showNewCase, setShowNewCase] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newTooth, setNewTooth] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const [creatingCase, setCreatingCase] = useState(false);
+  const [editingCase, setEditingCase] = useState(false);
+  const [caseTitleDraft, setCaseTitleDraft] = useState('');
+  const [caseToothDraft, setCaseToothDraft] = useState('');
+  const [caseNotesDraft, setCaseNotesDraft] = useState('');
+  const [savingCase, setSavingCase] = useState(false);
+
   // Envio
   const [category, setCategory] = useState<PhotoCategory>('radiografia');
   const [caption, setCaption] = useState('');
@@ -81,6 +109,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [editCategory, setEditCategory] = useState<PhotoCategory>('outra');
   const [editCaption, setEditCaption] = useState('');
   const [editDate, setEditDate] = useState(today());
+  const [editCaseId, setEditCaseId] = useState('');
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -186,7 +215,9 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const load = useCallback(async () => {
     try {
       setError('');
-      setPhotos(await listPatientPhotos(patient.id));
+      const [photoList, caseList] = await Promise.all([listPatientPhotos(patient.id), listPatientCases(patient.id)]);
+      setPhotos(photoList);
+      setCases(caseList);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar as fotos.');
     } finally {
@@ -198,12 +229,104 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     load();
   }, [load]);
 
-  const visible = filter === 'todas' ? photos : photos.filter((p) => p.category === filter);
+  const activeCase = selectedCase && selectedCase !== NO_CASE ? cases.find((c) => c.id === selectedCase) ?? null : null;
+  // Fotos do caso aberto (ou as sem caso). Na lista de casos nenhuma foto está "aberta".
+  const casePhotos =
+    selectedCase === null
+      ? []
+      : selectedCase === NO_CASE
+        ? photos.filter((p) => !p.case_id)
+        : photos.filter((p) => p.case_id === selectedCase);
+  const photosOfCase = (id: string) => photos.filter((p) => p.case_id === id);
+  const orphanPhotos = photos.filter((p) => !p.case_id);
+
+  const visible = filter === 'todas' ? casePhotos : casePhotos.filter((p) => p.category === filter);
   const viewerIndex = viewerId ? visible.findIndex((p) => p.id === viewerId) : -1;
   const viewerPhoto = viewerIndex >= 0 ? visible[viewerIndex] : null;
 
   const countOf = (c: PhotoCategory | 'todas') =>
-    c === 'todas' ? photos.length : photos.filter((p) => p.category === c).length;
+    c === 'todas' ? casePhotos.length : casePhotos.filter((p) => p.category === c).length;
+
+  const resetCaseView = () => {
+    setFilter('todas');
+    setCompareMode(false);
+    setSelected([]);
+    setViewerId(null);
+    setComparing(false);
+    setEditing(false);
+    setEditingCase(false);
+    setUploadErrors([]);
+  };
+
+  const openCase = (id: string) => {
+    resetCaseView();
+    setSelectedCase(id);
+  };
+
+  const closeCase = () => {
+    resetCaseView();
+    setSelectedCase(null);
+  };
+
+  const handleCreateCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || creatingCase) return;
+    setCreatingCase(true);
+    try {
+      const created = await createPatientCase(patient.id, { title: newTitle, tooth: newTooth, notes: newNotes });
+      setCases((prev) => [created, ...prev]);
+      setShowNewCase(false);
+      setNewTitle('');
+      setNewTooth('');
+      setNewNotes('');
+      openCase(created.id);
+    } catch (err: any) {
+      alert('Erro ao criar o caso: ' + err.message);
+    } finally {
+      setCreatingCase(false);
+    }
+  };
+
+  const startEditCase = (c: PatientCase) => {
+    setCaseTitleDraft(c.title);
+    setCaseToothDraft(c.tooth ?? '');
+    setCaseNotesDraft(c.notes ?? '');
+    setEditingCase(true);
+  };
+
+  const saveCase = async (c: PatientCase) => {
+    if (!caseTitleDraft.trim() || savingCase) return;
+    setSavingCase(true);
+    try {
+      await updatePatientCase(c.id, { title: caseTitleDraft, tooth: caseToothDraft, notes: caseNotesDraft });
+      setEditingCase(false);
+      await load();
+    } catch (err: any) {
+      alert('Erro ao salvar o caso: ' + err.message);
+    } finally {
+      setSavingCase(false);
+    }
+  };
+
+  const toggleCaseStatus = async (c: PatientCase) => {
+    try {
+      await updatePatientCase(c.id, { status: c.status === 'concluido' ? 'em_andamento' : 'concluido' });
+      await load();
+    } catch (err: any) {
+      alert('Erro ao atualizar o caso: ' + err.message);
+    }
+  };
+
+  const handleDeleteCase = async (c: PatientCase) => {
+    if (!confirm(`Excluir o caso "${c.title}"? As fotos dele NÃO serão apagadas: voltam para "Sem caso".`)) return;
+    try {
+      await deletePatientCase(c.id);
+      closeCase();
+      await load();
+    } catch (err: any) {
+      alert('Erro ao excluir o caso: ' + err.message);
+    }
+  };
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -215,7 +338,12 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     const errors: string[] = [];
     for (let i = 0; i < files.length; i++) {
       try {
-        await uploadPatientPhoto(patient.id, files[i], { category, caption: caption.trim(), takenOn });
+        await uploadPatientPhoto(patient.id, files[i], {
+          category,
+          caption: caption.trim(),
+          takenOn,
+          caseId: activeCase?.id ?? null,
+        });
       } catch (err: any) {
         errors.push(`${files[i].name}: ${err.message}`);
       }
@@ -265,12 +393,19 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     setEditCategory(p.category);
     setEditCaption(p.caption || '');
     setEditDate(p.taken_on);
+    setEditCaseId(p.case_id ?? '');
     setEditing(true);
   };
 
   const saveEdit = async (p: PatientPhoto) => {
     try {
-      await updatePatientPhoto(p.id, { category: editCategory, caption: editCaption.trim(), taken_on: editDate });
+      await updatePatientPhoto(p.id, {
+        category: editCategory,
+        caption: editCaption.trim(),
+        taken_on: editDate,
+        // Só manda o caso se mudou: mover a foto a tira da tela deste caso.
+        ...(editCaseId !== (p.case_id ?? '') ? { case_id: editCaseId || null } : {}),
+      });
       setEditing(false);
       await load();
     } catch (err: any) {
@@ -306,19 +441,223 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     setSelected([]);
   };
 
-  const selectedPhotos = selected.map((id) => photos.find((p) => p.id === id)).filter(Boolean) as PatientPhoto[];
+  const selectedPhotos = selected.map((id) => casePhotos.find((p) => p.id === id)).filter(Boolean) as PatientPhoto[];
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <button className={styles.backBtn} onClick={onBack}>
-          <ArrowLeft size={16} /> Voltar para Pacientes
+        <button className={styles.backBtn} onClick={selectedCase === null ? onBack : closeCase}>
+          <ArrowLeft size={16} /> {selectedCase === null ? 'Voltar para Pacientes' : 'Voltar aos casos'}
         </button>
         <div>
-          <h1 className={styles.title}>Fotos e Radiografias</h1>
-          <p className={styles.subtitle}>{patient.name}</p>
+          <h1 className={styles.title}>
+            {selectedCase === null ? 'Fotos e Radiografias' : activeCase ? activeCase.title : 'Sem caso'}
+          </h1>
+          <p className={styles.subtitle}>
+            {patient.name}
+            {activeCase?.tooth ? ` · ${activeCase.tooth}` : ''}
+          </p>
         </div>
       </div>
+
+      {error && <div className={styles.errorBox}>{error}</div>}
+
+      {selectedCase === null ? (
+        /* ------------------------- Lista de casos ------------------------- */
+        <>
+          {!isReadOnly && (
+            <div className={styles.casesBar}>
+              <button type="button" className={styles.uploadBtn} onClick={() => setShowNewCase((v) => !v)}>
+                <Plus size={16} /> Novo caso
+              </button>
+            </div>
+          )}
+
+          {showNewCase && !isReadOnly && (
+            <form className={styles.uploadCard} onSubmit={handleCreateCase}>
+              <div className={styles.uploadFields}>
+                <div className={`${styles.field} ${styles.fieldGrow}`}>
+                  <label>Título do caso</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    maxLength={120}
+                    autoFocus
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="Ex: Implantes 11 e 21, Canal dente 36, Clareamento..."
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label>Dente / região (opcional)</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    maxLength={60}
+                    value={newTooth}
+                    onChange={(e) => setNewTooth(e.target.value)}
+                    placeholder="Ex: 36, 11 e 21"
+                  />
+                </div>
+                <div className={`${styles.field} ${styles.fieldGrow}`}>
+                  <label>Observação (opcional)</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    maxLength={2000}
+                    value={newNotes}
+                    onChange={(e) => setNewNotes(e.target.value)}
+                  />
+                </div>
+                <button type="submit" className={styles.uploadBtn} disabled={!newTitle.trim() || creatingCase}>
+                  {creatingCase ? 'Criando...' : 'Criar caso'}
+                </button>
+                <button type="button" className={styles.ghostBtn} onClick={() => setShowNewCase(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
+
+          {loading ? (
+            <div className={styles.empty}>Carregando casos...</div>
+          ) : cases.length === 0 && orphanPhotos.length === 0 ? (
+            <div className={styles.empty}>
+              Nenhum caso cadastrado para este paciente ainda.
+              {!isReadOnly && ' Clique em "Novo caso" para começar a organizar as fotos e radiografias por tratamento.'}
+            </div>
+          ) : (
+            <div className={styles.caseGrid}>
+              {cases.map((c) => {
+                const list = photosOfCase(c.id);
+                const cover = coverOf(list);
+                return (
+                  <button key={c.id} type="button" className={styles.caseCard} onClick={() => openCase(c.id)}>
+                    <span className={styles.caseCover}>
+                      {cover ? (
+                        <img src={cover.urls.media} alt={c.title} loading="lazy" />
+                      ) : (
+                        <span className={styles.caseCoverEmpty}>
+                          <FolderOpen size={32} />
+                          Sem fotos ainda
+                        </span>
+                      )}
+                      <span
+                        className={`${styles.badge} ${c.status === 'concluido' ? styles.badge_depois : styles.badge_antes}`}
+                      >
+                        {c.status === 'concluido' ? 'Concluído' : 'Em andamento'}
+                      </span>
+                    </span>
+                    <span className={styles.caseInfo}>
+                      <strong>{c.title}</strong>
+                      {c.tooth && <em>{c.tooth}</em>}
+                      <span className={styles.caseMeta}>
+                        {formatDate(c.opened_on)}
+                        {c.closed_on ? ` → ${formatDate(c.closed_on)}` : ''} · {list.length}{' '}
+                        {list.length === 1 ? 'foto' : 'fotos'}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+              {orphanPhotos.length > 0 && (
+                <button type="button" className={styles.caseCard} onClick={() => openCase(NO_CASE)}>
+                  <span className={styles.caseCover}>
+                    <img src={coverOf(orphanPhotos).urls.media} alt="Sem caso" loading="lazy" />
+                    <span className={`${styles.badge} ${styles.badge_outra}`}>Avulsas</span>
+                  </span>
+                  <span className={styles.caseInfo}>
+                    <strong>Sem caso</strong>
+                    <em>Fotos ainda não organizadas</em>
+                    <span className={styles.caseMeta}>
+                      {orphanPhotos.length} {orphanPhotos.length === 1 ? 'foto' : 'fotos'}
+                    </span>
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+      {activeCase && (
+        <div className={styles.caseHeader}>
+          {editingCase ? (
+            <div className={styles.editRow}>
+              <input
+                type="text"
+                className={`${styles.input} ${styles.fieldGrow}`}
+                maxLength={120}
+                value={caseTitleDraft}
+                onChange={(e) => setCaseTitleDraft(e.target.value)}
+                placeholder="Título do caso"
+              />
+              <input
+                type="text"
+                className={styles.input}
+                maxLength={60}
+                value={caseToothDraft}
+                onChange={(e) => setCaseToothDraft(e.target.value)}
+                placeholder="Dente / região"
+              />
+              <input
+                type="text"
+                className={`${styles.input} ${styles.fieldGrow}`}
+                maxLength={2000}
+                value={caseNotesDraft}
+                onChange={(e) => setCaseNotesDraft(e.target.value)}
+                placeholder="Observação"
+              />
+              <button
+                className={styles.uploadBtn}
+                disabled={!caseTitleDraft.trim() || savingCase}
+                onClick={() => saveCase(activeCase)}
+              >
+                {savingCase ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button className={styles.ghostBtn} onClick={() => setEditingCase(false)}>
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className={styles.caseHeaderInfo}>
+                <span
+                  className={`${styles.badgeInline} ${activeCase.status === 'concluido' ? styles.badge_depois : styles.badge_antes}`}
+                >
+                  {activeCase.status === 'concluido' ? 'Concluído' : 'Em andamento'}
+                </span>
+                <span>
+                  Aberto em {formatDate(activeCase.opened_on)}
+                  {activeCase.closed_on ? ` · concluído em ${formatDate(activeCase.closed_on)}` : ''}
+                </span>
+                {activeCase.notes && <span className={styles.caseNotes}>{activeCase.notes}</span>}
+              </div>
+              {!isReadOnly && (
+                <div className={styles.lightboxActions}>
+                  <button className={styles.ghostBtn} onClick={() => toggleCaseStatus(activeCase)}>
+                    {activeCase.status === 'concluido' ? (
+                      <>
+                        <RotateCcw size={14} /> Reabrir caso
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} /> Concluir caso
+                      </>
+                    )}
+                  </button>
+                  <button className={styles.ghostBtn} onClick={() => startEditCase(activeCase)}>
+                    <Pencil size={14} /> Editar caso
+                  </button>
+                  <button className={`${styles.ghostBtn} ${styles.danger}`} onClick={() => handleDeleteCase(activeCase)}>
+                    <Trash2 size={14} /> Excluir caso
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {!isReadOnly && (
         <div className={styles.uploadCard}>
@@ -381,7 +720,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
             </button>
           ))}
         </div>
-        {photos.length >= 2 && (
+        {casePhotos.length >= 2 && (
           <div className={styles.compareControls}>
             {compareMode && (
               <button className={styles.compareGo} disabled={selected.length !== 2} onClick={() => setComparing(true)}>
@@ -395,14 +734,14 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
         )}
       </div>
 
-      {error && <div className={styles.errorBox}>{error}</div>}
-
       {loading ? (
         <div className={styles.empty}>Carregando fotos...</div>
       ) : visible.length === 0 ? (
         <div className={styles.empty}>
-          {photos.length === 0
-            ? 'Nenhuma foto cadastrada para este paciente ainda.'
+          {casePhotos.length === 0
+            ? selectedCase === NO_CASE
+              ? 'Nenhuma foto sem caso.'
+              : 'Nenhuma foto neste caso ainda. Use "Adicionar fotos" acima.'
             : 'Nenhuma foto nesta categoria.'}
         </div>
       ) : (
@@ -475,6 +814,14 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                     {PHOTO_CATEGORIES.map((c) => (
                       <option key={c.value} value={c.value}>
                         {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select className={styles.input} value={editCaseId} onChange={(e) => setEditCaseId(e.target.value)} title="Caso">
+                    <option value="">Sem caso</option>
+                    {cases.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
                       </option>
                     ))}
                   </select>
@@ -660,6 +1007,8 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

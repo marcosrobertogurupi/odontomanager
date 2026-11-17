@@ -871,3 +871,110 @@
     min-height: 200px;
   }
 }
+
+/* Categoria "Durante" */
+.badge_durante {
+  background: hsl(var(--primary));
+}
+
+/* Casos clínicos */
+.casesBar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.caseGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.caseCard {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  text-align: left;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+  background-color: hsl(var(--bg-card));
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-fast);
+  font: inherit;
+  color: inherit;
+}
+
+.caseCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.caseCover {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+}
+
+.caseCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.caseCoverEmpty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+}
+
+.caseInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px 14px;
+}
+
+.caseInfo em {
+  font-style: normal;
+  font-size: 13px;
+  color: hsl(var(--text-muted));
+}
+
+.caseMeta {
+  font-size: 12px;
+  color: hsl(var(--text-muted));
+}
+
+.caseHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--radius-md);
+}
+
+.caseHeaderInfo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: hsl(var(--text-muted));
+}
+
+.caseNotes {
+  color: hsl(var(--text-main, var(--text-muted)));
+}
