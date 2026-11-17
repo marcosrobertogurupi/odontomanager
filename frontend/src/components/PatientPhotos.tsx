@@ -64,6 +64,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [editDate, setEditDate] = useState(today());
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
 
   // Análise por IA: só roda quando o dentista clica no botão (cada clique tem custo).
@@ -259,7 +260,15 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   };
 
   const handleDelete = async (p: PatientPhoto) => {
-    if (!confirm('Excluir esta foto definitivamente? Esta ação é irreversível.')) return;
+    if (deletingId) return;
+    if (
+      !confirm(
+        'Excluir esta foto definitivamente? As análises de IA dela também serão apagadas. Esta ação é irreversível.'
+      )
+    ) {
+      return;
+    }
+    setDeletingId(p.id);
     try {
       const nextIndex = Math.min(viewerIndex, visible.length - 2);
       await deletePatientPhoto(p.id);
@@ -268,6 +277,8 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
       await load();
     } catch (err: any) {
       alert('Erro ao excluir: ' + err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -380,8 +391,8 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
           {visible.map((p) => {
             const order = selected.indexOf(p.id);
             return (
+              <div key={p.id} className={styles.thumbWrap}>
               <button
-                key={p.id}
                 className={`${styles.thumb} ${order >= 0 ? styles.thumbSelected : ''}`}
                 onClick={() => openViewer(p)}
                 title={p.caption || categoryLabel(p.category)}
@@ -398,6 +409,19 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                   {p.caption && <em>{p.caption}</em>}
                 </span>
               </button>
+              {!isReadOnly && !compareMode && (
+                <button
+                  type="button"
+                  className={styles.thumbDelete}
+                  title="Excluir foto"
+                  aria-label="Excluir foto"
+                  disabled={deletingId === p.id}
+                  onClick={() => handleDelete(p)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+              </div>
             );
           })}
         </div>
@@ -471,8 +495,12 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                       <button className={styles.ghostBtn} onClick={() => startEdit(viewerPhoto)}>
                         <Pencil size={14} /> Editar
                       </button>
-                      <button className={`${styles.ghostBtn} ${styles.danger}`} onClick={() => handleDelete(viewerPhoto)}>
-                        <Trash2 size={14} /> Excluir
+                      <button
+                        className={`${styles.ghostBtn} ${styles.danger}`}
+                        disabled={deletingId === viewerPhoto.id}
+                        onClick={() => handleDelete(viewerPhoto)}
+                      >
+                        <Trash2 size={14} /> {deletingId === viewerPhoto.id ? 'Excluindo...' : 'Excluir'}
                       </button>
                     </div>
                   )}
