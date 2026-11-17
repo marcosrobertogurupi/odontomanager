@@ -990,3 +990,41 @@
   border: 1px solid hsl(var(--primary) / 0.25);
   border-radius: var(--radius-md);
 }
+
+/* Card de caso com botão de editar sobreposto */
+.caseWrap {
+  position: relative;
+  display: flex;
+}
+
+.caseWrap > .caseCard {
+  flex: 1;
+}
+
+.caseEdit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.7);
+  color: #fff;
+  cursor: pointer;
+}
+
+.caseEdit:hover {
+  background: hsl(var(--primary));
+}
+
+/* Confirmação de envio */
+.uploadOk {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--success));
+}

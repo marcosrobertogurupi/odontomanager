@@ -247,3 +247,13 @@ export async function deletePatientCase(id: string): Promise<void> {
   const { error } = await supabase.from('patient_cases').delete().eq('id', id);
   if (error) throw new Error(error.message || 'Não foi possível excluir o caso.');
 }
+
+/**
+ * Move várias fotos de uma vez para um caso (ou para "Sem caso" com null). Vai direto ao banco: só muda
+ * metadado, e o RLS garante a clínica e que o caso é do mesmo paciente da foto.
+ */
+export async function movePhotosToCase(photoIds: string[], caseId: string | null): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase.from('patient_photos').update({ case_id: caseId }).in('id', photoIds);
+  if (error) throw new Error(error.message || 'Não foi possível mover as fotos.');
+}

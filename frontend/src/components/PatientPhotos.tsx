@@ -26,6 +26,7 @@ import {
   deletePatientPhoto,
   listPatientCases,
   listPatientPhotos,
+  movePhotosToCase,
   updatePatientCase,
   updatePatientPhoto,
   uploadPatientPhoto,
@@ -101,6 +102,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const [takenOn, setTakenOn] = useState(today());
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [uploadOk, setUploadOk] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Visualização / edição / comparação
@@ -255,7 +257,9 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     setComparing(false);
     setEditing(false);
     setEditingCase(false);
+    setShowNewCase(false);
     setUploadErrors([]);
+    setUploadOk('');
   };
 
   const openCase = (id: string) => {
@@ -279,6 +283,33 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
       setNewTitle('');
       setNewTooth('');
       setNewNotes('');
+      openCase(created.id);
+    } catch (err: any) {
+      alert('Erro ao criar o caso: ' + err.message);
+    } finally {
+      setCreatingCase(false);
+    }
+  };
+
+  // Na tela "Sem caso": cria um caso e já move para ele todas as fotos avulsas.
+  const handleCreateCaseFromLoose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || creatingCase) return;
+    setCreatingCase(true);
+    try {
+      const created = await createPatientCase(patient.id, { title: newTitle, tooth: newTooth, notes: newNotes });
+      try {
+        await movePhotosToCase(
+          casePhotos.map((p) => p.id),
+          created.id
+        );
+      } catch (err: any) {
+        alert('O caso foi criado, mas não foi possível mover as fotos: ' + err.message);
+      }
+      setNewTitle('');
+      setNewTooth('');
+      setNewNotes('');
+      await load();
       openCase(created.id);
     } catch (err: any) {
       alert('Erro ao criar o caso: ' + err.message);
@@ -334,6 +365,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     if (files.length === 0) return;
 
     setUploadErrors([]);
+    setUploadOk('');
     setUploading({ done: 0, total: files.length });
     const errors: string[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -351,7 +383,13 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
     }
     setUploading(null);
     setUploadErrors(errors);
-    if (errors.length < files.length) setCaption('');
+    const sent = files.length - errors.length;
+    if (sent > 0) {
+      setCaption('');
+      // Se a aba aberta for de outra categoria (ex.: "Antes") a foto enviada como "Radiografia" não apareceria na grade.
+      setFilter('todas');
+      setUploadOk(sent === 1 ? 'Foto enviada com sucesso.' : `${sent} fotos enviadas com sucesso.`);
+    }
     await load();
   };
 
@@ -541,7 +579,8 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                 const list = photosOfCase(c.id);
                 const cover = coverOf(list);
                 return (
-                  <button key={c.id} type="button" className={styles.caseCard} onClick={() => openCase(c.id)}>
+                  <div key={c.id} className={styles.caseWrap}>
+                  <button type="button" className={styles.caseCard} onClick={() => openCase(c.id)}>
                     <span className={styles.caseCover}>
                       {cover ? (
                         <img src={cover.urls.media} alt={c.title} loading="lazy" />
@@ -567,6 +606,21 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                       </span>
                     </span>
                   </button>
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      className={styles.caseEdit}
+                      title="Editar caso"
+                      aria-label={`Editar o caso ${c.title}`}
+                      onClick={() => {
+                        openCase(c.id);
+                        startEditCase(c);
+                      }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  </div>
                 );
               })}
               {orphanPhotos.length > 0 && (
@@ -589,6 +643,51 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
         </>
       ) : (
         <>
+      {selectedCase === NO_CASE && !isReadOnly && casePhotos.length > 0 && (
+        <div className={styles.caseHeader}>
+          {showNewCase ? (
+            <form className={styles.editRow} onSubmit={handleCreateCaseFromLoose}>
+              <input
+                type="text"
+                className={`${styles.input} ${styles.fieldGrow}`}
+                maxLength={120}
+                autoFocus
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Título do caso (ex: Implantes 11 e 21)"
+              />
+              <input
+                type="text"
+                className={styles.input}
+                maxLength={60}
+                value={newTooth}
+                onChange={(e) => setNewTooth(e.target.value)}
+                placeholder="Dente / região"
+              />
+              <button type="submit" className={styles.uploadBtn} disabled={!newTitle.trim() || creatingCase}>
+                {creatingCase
+                  ? 'Criando...'
+                  : `Criar caso e mover ${casePhotos.length} ${casePhotos.length === 1 ? 'foto' : 'fotos'}`}
+              </button>
+              <button type="button" className={styles.ghostBtn} onClick={() => setShowNewCase(false)}>
+                Cancelar
+              </button>
+            </form>
+          ) : (
+            <>
+              <div className={styles.caseHeaderInfo}>
+                <span>Estas fotos ainda não estão em nenhum caso.</span>
+              </div>
+              <div className={styles.lightboxActions}>
+                <button className={styles.uploadBtn} onClick={() => setShowNewCase(true)}>
+                  <Plus size={16} /> Criar caso com estas fotos
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {activeCase && (
         <div className={styles.caseHeader}>
           {editingCase ? (
@@ -707,6 +806,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
             </button>
             <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
           </div>
+          {uploadOk && <p className={styles.uploadOk}>{uploadOk}</p>}
           {uploadErrors.length > 0 && (
             <ul className={styles.errorList}>
               {uploadErrors.map((m) => (
@@ -723,7 +823,11 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
             <button
               key={c}
               className={`${styles.tab} ${filter === c ? styles.tabActive : ''}`}
-              onClick={() => setFilter(c)}
+              onClick={() => {
+                setFilter(c);
+                // O "Tipo" do envio acompanha a aba, para a foto enviada aparecer na aba que está aberta.
+                if (c !== 'todas') setCategory(c);
+              }}
             >
               {c === 'todas' ? 'Todas' : categoryLabel(c)} <span className={styles.tabCount}>{countOf(c)}</span>
             </button>
