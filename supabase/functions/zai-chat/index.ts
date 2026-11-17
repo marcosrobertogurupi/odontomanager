@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8"
 
+// Modelo padrão do Gemini. "gemini-1.5-flash" foi desligado pelo Google (set/2025).
+// Mantenha igual ao DEFAULT_GEMINI_MODEL de frontend/src/lib/geminiModels.ts.
+const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -323,7 +327,9 @@ serve(async (req) => {
       .maybeSingle();
 
     const geminiApiKey = integration?.gemini_api_key || Deno.env.get('GEMINI_API_KEY');
-    const geminiModel = integration?.gemini_model || Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-flash';
+    // Nomes de modelos já desligados pelo Google (1.5 e 2.0) dão erro 404: troca pelo padrão atual.
+    const savedModel = (integration?.gemini_model || Deno.env.get('GEMINI_MODEL') || '').trim();
+    const geminiModel = !savedModel || /^(models\/)?gemini-(1\.\d|2\.0)/i.test(savedModel) ? DEFAULT_GEMINI_MODEL : savedModel;
 
     if (!geminiApiKey) {
       return new Response(JSON.stringify({ error: "Chave do Gemini (GEMINI_API_KEY) não configurada para esta clínica nem no servidor." }), {

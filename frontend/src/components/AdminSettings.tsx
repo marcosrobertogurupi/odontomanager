@@ -26,6 +26,7 @@ import styles from './AdminSettings.module.css';
 import { formatDate } from '../lib/formatters';
 import { useTenant } from '../contexts/TenantContext';
 import { supabase } from '../lib/supabaseClient';
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel } from '../lib/geminiModels';
 
 interface Unit {
   id: string;
@@ -81,7 +82,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
   const [twilioAuthToken, setTwilioAuthToken] = useState('');
   const [twilioFromNumber, setTwilioFromNumber] = useState('');
   const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   
   const [savingIntegrations, setSavingIntegrations] = useState(false);
 
@@ -421,7 +422,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
         setTwilioAuthToken(data.twilio_auth_token || '');
         setTwilioFromNumber(data.twilio_from_number || '');
         setGeminiApiKey(data.gemini_api_key || '');
-        setGeminiModel(data.gemini_model || 'gemini-1.5-flash');
+        setGeminiModel(resolveGeminiModel(data.gemini_model));
       } else {
         setUazapiServerUrl('');
         setUazapiInstanceId('');
@@ -431,7 +432,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
         setTwilioAuthToken('');
         setTwilioFromNumber('');
         setGeminiApiKey('');
-        setGeminiModel('gemini-1.5-flash');
+        setGeminiModel(DEFAULT_GEMINI_MODEL);
       }
     } catch (err) {
       console.error('Erro ao buscar configurações de integração:', err);
@@ -457,7 +458,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
           twilio_auth_token: twilioAuthToken || null,
           twilio_from_number: twilioFromNumber || null,
           gemini_api_key: geminiApiKey || null,
-          gemini_model: geminiModel || 'gemini-1.5-flash'
+          gemini_model: resolveGeminiModel(geminiModel)
         }, { onConflict: 'tenant_id' });
 
       if (error) throw error;
@@ -1605,7 +1606,7 @@ export default function AdminSettings({ units, fetchUnits }: AdminSettingsProps)
                   className={styles.input} 
                   value={geminiModel}
                   onChange={(e) => setGeminiModel(e.target.value)}
-                  placeholder="Ex: gemini-1.5-flash"
+                  placeholder={`Ex: ${DEFAULT_GEMINI_MODEL}`}
                 />
               </div>
             </div>

@@ -1,3 +1,4 @@
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel } from './geminiModels';
 export interface InvoiceItem {
   id: string;
   codigo_original: string;
@@ -443,7 +444,7 @@ export async function salvarMapeamentosFornecedor(
 export async function scanInvoiceWithGemini(
   file: File,
   apiKey: string,
-  modelName: string = 'gemini-1.5-flash'
+  modelName: string = DEFAULT_GEMINI_MODEL
 ): Promise<InvoiceData> {
   if (!apiKey) {
     throw new Error('Chave de API do Gemini não informada. Configure nas Configurações da Clínica ou insira no campo.');
@@ -493,7 +494,7 @@ REGRAS CRÍTICAS:
     else effectiveMime = 'image/jpeg';
   }
 
-  const effectiveModel = modelName.trim() || 'gemini-1.5-flash';
+  const effectiveModel = resolveGeminiModel(modelName);
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent?key=${apiKey}`;
 
   const requestBody = {

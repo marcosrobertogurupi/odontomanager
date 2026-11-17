@@ -19,6 +19,7 @@ import {
   Link2
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { DEFAULT_GEMINI_MODEL, resolveGeminiModel } from '../lib/geminiModels';
 import { useTenant } from '../contexts/TenantContext';
 import { 
   type InvoiceData, 
@@ -58,7 +59,7 @@ export default function InvoiceImportModal({
   
   // Chave de API Gemini
   const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
   // Drag and drop & Câmera
@@ -98,7 +99,7 @@ export default function InvoiceImportModal({
 
         if (data && data.gemini_api_key) {
           setGeminiApiKey(data.gemini_api_key);
-          if (data.gemini_model) setGeminiModel(data.gemini_model);
+          if (data.gemini_model) setGeminiModel(resolveGeminiModel(data.gemini_model));
           setShowApiKeyInput(false);
         } else {
           setShowApiKeyInput(true);
@@ -215,7 +216,7 @@ export default function InvoiceImportModal({
         .upsert({
           tenant_id: activeTenant.id,
           gemini_api_key: geminiApiKey.trim(),
-          gemini_model: geminiModel.trim() || 'gemini-1.5-flash'
+          gemini_model: resolveGeminiModel(geminiModel)
         }, { onConflict: 'tenant_id' });
 
       if (error) throw error;
