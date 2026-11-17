@@ -10,14 +10,17 @@ import {
   Mail,
   Calendar,
   FileText,
-  Calculator
+  Calculator,
+  Camera
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { purgePatientPhotos } from '../lib/patientPhotos';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './Patients.module.css';
 import { formatDate, formatCPF, isValidCPF } from '../lib/formatters';
 import Papelaria from './Papelaria';
 import PatientBudget from './PatientBudget';
+import PatientPhotos from './PatientPhotos';
 
 interface Patient {
   id: string;
@@ -48,6 +51,7 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [papelariaPatient, setPapelariaPatient] = useState<Patient | null>(null);
   const [budgetPatient, setBudgetPatient] = useState<Patient | null>(null);
+  const [photosPatient, setPhotosPatient] = useState<Patient | null>(null);
 
   // Form Fields
   const [formName, setFormName] = useState('');
@@ -196,6 +200,10 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
     if (!confirm('Deseja realmente excluir este paciente? Esta ação é irreversível.')) return;
 
     try {
+      // Apaga antes os arquivos de fotos/radiografias do paciente no R2 (o banco só remove os
+      // registros em cascata). Se não conseguir apagar os arquivos, cancela a exclusão.
+      await purgePatientPhotos(id);
+
       const { error } = await supabase
         .from('patients')
         .delete()
@@ -219,6 +227,15 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
           setBudgetPatient(null);
           setPapelariaPatient(p as Patient);
         }}
+      />
+    );
+  }
+
+  if (photosPatient) {
+    return (
+      <PatientPhotos
+        patient={photosPatient}
+        onBack={() => setPhotosPatient(null)}
       />
     );
   }
@@ -284,6 +301,14 @@ export default function Patients({ searchTerm, selectedUnit }: PatientsProps) {
                       >
                         <Calculator size={15} />
                         <span>Orçamento</span>
+                      </button>
+                      <button
+                        onClick={() => setPhotosPatient(p)}
+                        className={styles.btnFotos}
+                        title="Fotos, radiografias e antes/depois deste paciente"
+                      >
+                        <Camera size={15} />
+                        <span>Fotos</span>
                       </button>
                       <button
                         onClick={() => setPapelariaPatient(p)}

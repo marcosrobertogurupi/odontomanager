@@ -151,6 +151,27 @@
   border-color: hsl(var(--primary));
 }
 
+.btnFotos {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: hsl(var(--secondary) / 0.12);
+  color: hsl(var(--secondary));
+  border: 1px solid hsl(var(--secondary) / 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btnFotos:hover {
+  background-color: hsl(var(--secondary));
+  color: white;
+  border-color: hsl(var(--secondary));
+}
+
 .btnIcon {
   background: transparent;
   border: none;
