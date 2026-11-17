@@ -978,3 +978,15 @@
 .caseNotes {
   color: hsl(var(--text-main, var(--text-muted)));
 }
+
+/* Instrução do modo "Comparar antes e depois" */
+.compareHint {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background-color: hsl(var(--primary) / 0.08);
+  border: 1px solid hsl(var(--primary) / 0.25);
+  border-radius: var(--radius-md);
+}

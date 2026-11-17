@@ -437,8 +437,17 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   };
 
   const toggleCompare = () => {
-    setCompareMode((v) => !v);
-    setSelected([]);
+    if (compareMode) {
+      setCompareMode(false);
+      setSelected([]);
+      return;
+    }
+    // Já deixa marcados o "Antes" e o "Depois" mais recentes do caso (a lista vem da mais nova para a mais
+    // antiga): na maioria das vezes basta clicar em "Ver lado a lado". Dá para trocar clicando em outras fotos.
+    const before = casePhotos.find((p) => p.category === 'antes');
+    const after = casePhotos.find((p) => p.category === 'depois');
+    setSelected(before && after ? [before.id, after.id] : []);
+    setCompareMode(true);
   };
 
   const selectedPhotos = selected.map((id) => casePhotos.find((p) => p.id === id)).filter(Boolean) as PatientPhoto[];
@@ -733,6 +742,16 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
           </div>
         )}
       </div>
+
+      {compareMode && (
+        <p className={styles.compareHint}>
+          {selected.length === 2
+            ? 'Pronto! Clique em "Ver lado a lado". Para trocar, clique em outra foto.'
+            : selected.length === 1
+              ? 'Escolha mais uma foto para comparar.'
+              : 'Clique em duas fotos para compará-las lado a lado.'}
+        </p>
+      )}
 
       {loading ? (
         <div className={styles.empty}>Carregando fotos...</div>
