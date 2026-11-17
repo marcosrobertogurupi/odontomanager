@@ -41,6 +41,25 @@ interface PatientPhotosProps {
 const categoryLabel = (c: PhotoCategory) => PHOTO_CATEGORIES.find((x) => x.value === c)?.label ?? c;
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD no fuso local
 
+// Uma linha por parágrafo; "Rótulo: texto" ganha o rótulo em negrito para a leitura ficar mais confortável.
+function renderAnalysisText(text: string) {
+  return text
+    .split(/\n+/)
+    .filter((line) => line.trim())
+    .map((line, i) => {
+      const m = line.match(/^\s*([^:\n]{3,40}):\s*(.*)$/);
+      return m ? (
+        <p key={i} className={styles.aiLine}>
+          <strong>{m[1]}:</strong> {m[2]}
+        </p>
+      ) : (
+        <p key={i} className={styles.aiLine}>
+          {line}
+        </p>
+      );
+    });
+}
+
 export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
   const { isReadOnly, role } = useTenant();
   const [photos, setPhotos] = useState<PatientPhoto[]>([]);
@@ -430,10 +449,14 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
       {/* Visualizador */}
       {viewerPhoto && (
         <div className={styles.lightbox} onClick={() => setViewerId(null)}>
-          <div className={styles.lightboxBody} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={`${styles.lightboxBody} ${showAnalysisPanel ? styles.lightboxBodySplit : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button className={styles.lightboxClose} onClick={() => setViewerId(null)} aria-label="Fechar">
               <X size={20} />
             </button>
+            <div className={styles.viewerMain}>
             {visible.length > 1 && (
               <>
                 <button className={`${styles.nav} ${styles.navPrev}`} onClick={() => step(-1)} aria-label="Anterior">
@@ -444,7 +467,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                 </button>
               </>
             )}
-            <img className={`${styles.lightboxImg} ${showAnalysisPanel ? styles.lightboxImgSmall : ''}`} src={viewerPhoto.urls.grande} alt={viewerPhoto.caption || categoryLabel(viewerPhoto.category)} />
+            <img className={styles.lightboxImg} src={viewerPhoto.urls.grande} alt={viewerPhoto.caption || categoryLabel(viewerPhoto.category)} />
             <div className={styles.lightboxBar}>
               {editing ? (
                 <div className={styles.editRow}>
@@ -507,8 +530,12 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                 </>
               )}
             </div>
+            </div>
             {showAnalysisPanel && (
               <div className={styles.analysisPanel}>
+                <h3 className={styles.analysisTitle}>
+                  <Sparkles size={16} /> Análise por IA
+                </h3>
                 <p className={styles.aiDisclaimer}>
                   Descrição gerada por IA como apoio à avaliação. Não é laudo nem diagnóstico: confirme sempre com a
                   avaliação clínica do dentista.
@@ -546,7 +573,7 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                           className={styles.reviseText}
                           value={revisionDraft}
                           maxLength={4000}
-                          rows={7}
+                          rows={14}
                           onChange={(e) => setRevisionDraft(e.target.value)}
                         />
                         <div className={styles.reviseActions}>
@@ -576,11 +603,11 @@ export default function PatientPhotos({ patient, onBack }: PatientPhotosProps) {
                     ) : (
                       <>
                         {a.revised_summary && <span className={styles.revisedBadge}>Revisado pelo dentista</span>}
-                        <p className={styles.aiText}>{a.revised_summary ?? a.summary}</p>
+                        <div className={styles.aiText}>{renderAnalysisText(a.revised_summary ?? a.summary)}</div>
                         {a.revised_summary && (
                           <details className={styles.originalDetails}>
                             <summary>Ver texto original da IA</summary>
-                            <p className={styles.aiText}>{a.summary}</p>
+                            <div className={styles.aiText}>{renderAnalysisText(a.summary)}</div>
                           </details>
                         )}
                         {canAnalyze && (

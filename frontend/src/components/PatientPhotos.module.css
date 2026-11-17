@@ -612,7 +612,6 @@
   font-size: 14px;
   line-height: 1.5;
   color: hsl(var(--text-main));
-  white-space: pre-wrap;
 }
 
 .noteInput {
@@ -757,5 +756,118 @@
 @media (hover: none) {
   .thumbDelete {
     opacity: 1;
+  }
+}
+
+/* Visualizador em duas colunas quando há análise: foto de um lado, texto grande para ler do outro */
+.viewerMain {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lightboxBodySplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 500px);
+  gap: 16px;
+  width: min(1500px, 100%);
+  max-width: none;
+  height: calc(100vh - 48px);
+  max-height: none;
+}
+
+.lightboxBodySplit .viewerMain {
+  height: 100%;
+}
+
+.lightboxBodySplit .lightboxImg {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  width: 100%;
+  object-fit: contain;
+}
+
+.viewerMain .nav {
+  top: 42%;
+}
+
+.lightboxBodySplit .analysisPanel {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  padding: 22px 26px;
+  gap: 18px;
+}
+
+.analysisTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: hsl(var(--text-main));
+}
+
+.lightboxBodySplit .aiText {
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.aiLine {
+  margin: 0 0 12px;
+}
+
+.aiLine:last-child {
+  margin-bottom: 0;
+}
+
+.aiLine strong {
+  color: hsl(var(--primary));
+}
+
+.lightboxBodySplit .reviseText {
+  font-size: 15px;
+  line-height: 1.65;
+  min-height: 280px;
+}
+
+.lightboxBodySplit .noteInput {
+  font-size: 14px;
+  padding: 10px 14px;
+}
+
+.lightboxBodySplit .aiDisclaimer {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 14px;
+}
+
+/* Telas estreitas: foto em cima, análise embaixo ocupando o resto da tela */
+@media (max-width: 960px) {
+  .lightbox {
+    padding: 12px;
+  }
+
+  .lightboxBodySplit {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 42vh) minmax(0, 1fr);
+    height: calc(100vh - 24px);
+  }
+
+  .lightboxBodySplit .analysisPanel {
+    padding: 16px 18px;
+  }
+
+  .lightboxBodySplit .aiText {
+    font-size: 15px;
+  }
+
+  .lightboxBodySplit .reviseText {
+    min-height: 200px;
   }
 }
