@@ -30,21 +30,26 @@ async function get_today_agenda(supabaseClient: any) {
 async function get_financial_summary(supabaseClient: any, start_date: string, end_date: string) {
   const { data, error } = await supabaseClient
     .from('transactions')
-    .select('type, amount')
+    .select('type, amount, status')
     .gte('date', start_date)
     .lte('date', end_date);
 
   if (error) throw error;
 
+  // Receitas/despesas contam só o que foi efetivamente pago; o pendente vai em a_receber.
   const summary = (data || []).reduce((acc: any, curr: any) => {
     const val = Number(curr.amount);
+    if (curr.status === 'pending') {
+      if (curr.type === 'income') acc.a_receber += val;
+      return acc;
+    }
     if (curr.type === 'income') {
       acc.receitas += val;
     } else if (curr.type === 'expense') {
       acc.despesas += val;
     }
     return acc;
-  }, { receitas: 0, despesas: 0 });
+  }, { receitas: 0, despesas: 0, a_receber: 0 });
 
   summary.saldo = summary.receitas - summary.despesas;
   return summary;

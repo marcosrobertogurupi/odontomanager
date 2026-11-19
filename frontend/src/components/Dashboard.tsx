@@ -98,6 +98,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
             .select('type, amount, date')
             .eq('tenant_id', activeTenant.id)
             .eq('unit_id', selectedUnit)
+            .eq('status', 'paid')
             .gte('date', firstDayStr),
 
           // 2. Contar agendamentos de hoje sem trafegar todas as colunas/linhas

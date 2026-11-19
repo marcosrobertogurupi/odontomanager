@@ -469,6 +469,7 @@ export default function PatientBudget({
             amount: Number(totals.total.toFixed(2)),
             description,
             date: new Date().toISOString().split('T')[0],
+            status: 'pending',
           },
         ]);
 
@@ -511,7 +512,7 @@ export default function PatientBudget({
         }
 
         await fetchBudgetHistory();
-        alert(`Orçamento aprovado e receita de R$ ${formatCurrency(totals.total)} lançada no Financeiro!`);
+        alert(`Orçamento aprovado! R$ ${formatCurrency(totals.total)} lançado no Financeiro como "A Receber". Marque como pago no Fluxo de Caixa quando receber.`);
       } catch (err: any) {
         console.error('Erro ao aprovar e lançar orçamento:', err);
         alert('Erro ao lançar no Financeiro: ' + (err.message || err));
@@ -546,6 +547,7 @@ export default function PatientBudget({
           amount: Number(Number(snap.total).toFixed(2)),
           description,
           date: new Date().toISOString().split('T')[0],
+          status: 'pending',
         },
       ]);
 
@@ -572,7 +574,7 @@ export default function PatientBudget({
       }
 
       await fetchBudgetHistory();
-      alert(`Receita de R$ ${formatCurrency(Number(snap.total))} lançada com sucesso no Fluxo de Caixa!`);
+      alert(`R$ ${formatCurrency(Number(snap.total))} lançado no Fluxo de Caixa como "A Receber". Marque como pago quando receber.`);
     } catch (err: any) {
       console.error('Erro ao lançar receita:', err);
       alert('Erro ao lançar receita: ' + (err.message || err));

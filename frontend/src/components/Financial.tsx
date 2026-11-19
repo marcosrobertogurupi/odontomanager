@@ -23,6 +23,9 @@ interface Transaction {
   amount: number;
   description: string;
   date: string;
+  status: 'pending' | 'paid';
+  paid_at?: string | null;
+  patient_name?: string | null;
 }
 
 interface FinancialProps {
@@ -41,17 +44,40 @@ export default function Financial({ selectedUnit }: FinancialProps) {
   const [formAmount, setFormAmount] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Calcula o resumo sempre que transactions mudar — sem estado separado
+  // Calcula o resumo sempre que transactions mudar — sem estado separado.
+  // Receita e despesa contam só o que foi efetivamente pago; o que está pendente vai em "A Receber".
   const summary = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let pending = 0;
     transactions.forEach((tx) => {
       const amt = Number(tx.amount);
+      if (tx.status === 'pending') {
+        if (tx.type === 'income') pending += amt;
+        return;
+      }
       if (tx.type === 'income') income += amt;
       else if (tx.type === 'expense') expense += amt;
     });
-    return { income, expense, net: income - expense };
+    return { income, expense, pending, net: income - expense };
   }, [transactions]);
+
+  const handleMarkAsPaid = async (tx: Transaction) => {
+    if (!activeTenant) return;
+    if (!confirm(`Confirmar o recebimento de R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return;
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ status: 'paid', paid_at: new Date().toISOString().split('T')[0] })
+        .eq('id', tx.id)
+        .eq('tenant_id', activeTenant.id);
+      if (error) throw error;
+      fetchFinancialData();
+    } catch (err: any) {
+      console.error('Erro ao marcar lançamento como pago:', err);
+      alert('Erro ao marcar como pago: ' + err.message);
+    }
+  };
 
   const fetchFinancialData = async () => {
     if (!activeTenant || !selectedUnit) return;
@@ -87,6 +113,8 @@ export default function Financial({ selectedUnit }: FinancialProps) {
       amount: Number(formAmount),
       description: formDescription,
       date: formDate,
+      status: 'paid' as const,
+      paid_at: formDate,
       tenant_id: activeTenant.id
     };
 
@@ -134,6 +162,16 @@ export default function Financial({ selectedUnit }: FinancialProps) {
         </div>
 
         <div className={styles.cardSummary}>
+          <div className={styles.cardSummaryTitle} style={{ color: 'hsl(var(--warning))' }}>
+            <Calendar size={18} />
+            <span>A Receber (pendente)</span>
+          </div>
+          <div className={styles.cardSummaryValue}>
+            R$ {summary.pending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        <div className={styles.cardSummary}>
           <div className={styles.cardSummaryTitle} style={{ color: 'hsl(var(--danger))' }}>
             <ArrowDownRight size={18} />
             <span>Saídas / Despesas</span>
@@ -166,6 +204,7 @@ export default function Financial({ selectedUnit }: FinancialProps) {
               <th>Data</th>
               <th>Descrição</th>
               <th>Tipo</th>
+              <th>Situação</th>
               <th>Valor</th>
             </tr>
           </thead>
@@ -174,11 +213,40 @@ export default function Financial({ selectedUnit }: FinancialProps) {
               transactions.map(tx => (
                 <tr key={tx.id}>
                   <td>{formatDate(tx.date)}</td>
-                  <td style={{ fontWeight: '500' }}>{tx.description}</td>
+                  <td style={{ fontWeight: '500' }}>
+                    {tx.description}
+                    {!tx.patient_id && tx.patient_name && (
+                      <div style={{ fontSize: '12px', fontWeight: 400, color: 'hsl(var(--text-muted))' }}>
+                        Paciente excluído: {tx.patient_name}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <span className={`${styles.typeBadge} ${styles[tx.type]}`}>
                       {tx.type === 'income' ? 'Receita' : 'Despesa'}
                     </span>
+                  </td>
+                  <td>
+                    {tx.status === 'pending' ? (
+                      <button
+                        type="button"
+                        className={styles.typeBadge}
+                        style={{
+                          background: 'hsl(var(--warning-light, var(--bg-card)))',
+                          color: 'hsl(var(--warning))',
+                          border: '1px solid hsl(var(--warning))',
+                          cursor: 'pointer',
+                        }}
+                        title="Clique para marcar como pago"
+                        onClick={() => handleMarkAsPaid(tx)}
+                      >
+                        Pendente · marcar pago
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '13px', color: 'hsl(var(--text-muted))' }}>
+                        Pago{tx.paid_at ? ` em ${formatDate(tx.paid_at)}` : ''}
+                      </span>
+                    )}
                   </td>
                   <td style={{ fontWeight: '600', color: tx.type === 'income' ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
                     {tx.type === 'income' ? '+' : '-'} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -187,7 +255,7 @@ export default function Financial({ selectedUnit }: FinancialProps) {
               ))
             ) : (
               <tr>
-                <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: 'hsl(var(--text-muted))' }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'hsl(var(--text-muted))' }}>
                   Nenhuma transação financeira registrada.
                 </td>
               </tr>
