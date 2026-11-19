@@ -466,9 +466,6 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
       // Se nenhum procedimento selecionado, seleciona o primeiro ou carrega modelo padrão
       if (!selectedProcedureId && procs && procs.length > 0) {
         selectProcedureForPricing(procs[0].id, procs);
-      } else if (!selectedProcedureId && (!procs || procs.length === 0)) {
-        // Carrega modelo de exemplo da planilha (Endodontia)
-        loadTemplateIntoState(PLANILHA_PROCEDIMENTOS_TEMPLATES[0]);
       }
     } catch (err: any) {
       console.error('Erro ao carregar dados de precificação:', err);
@@ -497,8 +494,8 @@ export default function PricingSection({ selectedUnit }: PricingSectionProps) {
     if (horasOcupadasMes > 0 && totalCustosFixosMensal > 0) {
       return totalCustosFixosMensal / horasOcupadasMes;
     }
-    // Valor padrão didático da planilha caso ainda não tenha custos configurados
-    return 210.32125;
+    // Sem custos fixos / horas configurados não há custo hora calculável
+    return 0;
   }, [totalCustosFixosMensal, horasOcupadasMes, custoHoraManual]);
 
   // =========================================================================

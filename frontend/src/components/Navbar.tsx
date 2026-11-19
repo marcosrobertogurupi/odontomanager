@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import styles from './Navbar.module.css';
 import { useTenant } from '../contexts/TenantContext';
+import { useAverageSatisfaction } from '../lib/useAverageSatisfaction';
 
 interface NavbarProps {
   isSidebarCollapsed: boolean;
@@ -29,7 +30,8 @@ export default function Navbar({
   onSearch 
 }: NavbarProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const { profile, role, logout } = useTenant();
+  const { profile, role, logout, activeTenant } = useTenant();
+  const satisfactionRate = useAverageSatisfaction(activeTenant?.id);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -37,7 +39,7 @@ export default function Navbar({
     onSearch(val);
   };
 
-  const activeUnitName = units.find(u => u.id === selectedUnit)?.name || 'Matriz';
+  const activeUnitName = units.find(u => u.id === selectedUnit)?.name || 'Selecione a filial';
 
   const getUserInitials = () => {
     if (!profile?.name) return 'U';
@@ -72,11 +74,13 @@ export default function Navbar({
       </div>
 
       <div className={styles.rightSection}>
-        {/* Nota de Satisfação dos Pacientes */}
-        <div className={styles.satisfactionBadge}>
-          <Star size={16} fill="currentColor" />
-          <span>Pacientes: 9.8/10</span>
-        </div>
+        {/* Nota média de satisfação dos pacientes (calculada do banco) */}
+        {satisfactionRate !== null && (
+          <div className={styles.satisfactionBadge}>
+            <Star size={16} fill="currentColor" />
+            <span>Pacientes: {satisfactionRate.toFixed(1)}/10</span>
+          </div>
+        )}
 
         {/* Atalhos */}
         <div className={styles.shortcuts}>
@@ -85,7 +89,6 @@ export default function Navbar({
           </button>
           <button className={styles.shortcutBtn} title="Mensagens de equipe">
             <MessageSquare size={18} />
-            <span className={styles.notificationBadge} />
           </button>
           <button className={styles.shortcutBtn} title="Notificações e Alertas">
             <Bell size={18} />

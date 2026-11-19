@@ -25,7 +25,6 @@ import {
   type InvoiceData, 
   type InvoiceItem, 
   scanInvoiceWithGemini, 
-  getDoctorShopExampleData,
   carregarMapeamentosFornecedor,
   aplicarMapeamentosFornecedor,
   salvarMapeamentosFornecedor
@@ -145,7 +144,7 @@ export default function InvoiceImportModal({
 
       if (!key) {
         setShowApiKeyInput(true);
-        throw new Error('Por favor, informe a Chave de API do Google Gemini para processar a nota fiscal por IA, ou utilize a "Nota de Exemplo".');
+        throw new Error('Por favor, informe a Chave de API do Google Gemini para processar a nota fiscal por IA.');
       }
 
       const extracted = await scanInvoiceWithGemini(file, key, geminiModel);
@@ -157,23 +156,6 @@ export default function InvoiceImportModal({
     } catch (err: any) {
       console.error('Erro na extração da nota fiscal:', err);
       alert(err.message || 'Erro ao processar o arquivo. Verifique se o formato é válido.');
-    } finally {
-      setIsProcessing(false);
-      setLoadingStatus('');
-    }
-  };
-
-  // Carregar dados de exemplo (Doctor Shop DANFE anexada)
-  const handleLoadExample = async () => {
-    setIsProcessing(true);
-    setLoadingStatus('Carregando dados da DANFE de exemplo (Doctor Shop)...');
-    try {
-      const exampleData = getDoctorShopExampleData();
-      await reconcileWithCatalog(exampleData);
-      setInvoiceData(exampleData);
-      setStep('review');
-    } catch (err) {
-      console.error('Erro ao carregar exemplo:', err);
     } finally {
       setIsProcessing(false);
       setLoadingStatus('');
@@ -558,15 +540,6 @@ export default function InvoiceImportModal({
                     >
                       <Camera size={16} />
                       Tirar Foto da Nota
-                    </button>
-                    <button 
-                      type="button" 
-                      className={`${styles.actionBtn} ${styles.exampleAction}`}
-                      onClick={handleLoadExample}
-                      title="Carrega os 10 produtos da DANFE Doctor Shop de exemplo"
-                    >
-                      <Sparkles size={16} />
-                      Testar com DANFE de Exemplo (Doctor Shop)
                     </button>
                   </div>
                 </div>

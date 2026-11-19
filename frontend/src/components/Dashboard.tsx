@@ -12,32 +12,79 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
 import { checkAndGenerateSystemAnnouncements } from '../lib/systemAnnouncements';
+import { useAverageSatisfaction } from '../lib/useAverageSatisfaction';
 import styles from './Dashboard.module.css';
 
 interface DashboardProps {
   selectedUnit: string;
 }
 
+interface DayBalance {
+  dateStr: string;
+  label: string;
+  income: number;
+  expense: number;
+  isToday: boolean;
+}
+
+const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+// Data local no formato YYYY-MM-DD (toISOString usaria UTC e viraria o dia à noite no Brasil)
+const toLocalDateStr = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const formatBRL = (value: number) =>
+  value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Últimos 7 dias (6 dias atrás até hoje), já zerados
+const buildLastSevenDays = (): DayBalance[] => {
+  const days: DayBalance[] = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    days.push({
+      dateStr: toLocalDateStr(d),
+      label: WEEKDAY_LABELS[d.getDay()],
+      income: 0,
+      expense: 0,
+      isToday: i === 0
+    });
+  }
+  return days;
+};
+
 export default function Dashboard({ selectedUnit }: DashboardProps) {
-  const { activeTenant } = useTenant();
+  const { activeTenant, profile } = useTenant();
+  const satisfactionRate = useAverageSatisfaction(activeTenant?.id);
+  const firstName = profile?.name?.trim().split(/\s+/)[0] || '';
   const [stats, setStats] = useState({
     appointmentsCount: 0,
-    waitingRoomCount: 0,
-    monthlyIncome: 0,
-    satisfactionRate: 9.8
+    waitingRoomCount: 0
   });
-  const [financials, setFinancials] = useState({ income: 0, expense: 0 });
+  const [weekBalance, setWeekBalance] = useState<DayBalance[]>(buildLastSevenDays);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+
+  const todayBalance = weekBalance.find(d => d.isToday);
+  const todayIncome = todayBalance?.income ?? 0;
+  const weekIncome = weekBalance.reduce((acc, d) => acc + d.income, 0);
+  const weekExpense = weekBalance.reduce((acc, d) => acc + d.expense, 0);
+  const chartMax = Math.max(...weekBalance.flatMap(d => [d.income, d.expense]), 0);
 
   useEffect(() => {
     const loadDashboardData = async () => {
       if (!activeTenant || !selectedUnit) return;
 
       try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const startOfDay = `${todayStr}T00:00:00Z`;
-        const endOfDay = `${todayStr}T23:59:59Z`;
+        // Limites do dia no fuso local do usuário
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+
+        const days = buildLastSevenDays();
+        const firstDayStr = days[0].dateStr;
 
         // Executar consultas independentes em paralelo e usar Index-Only Scan / Count
         const [
@@ -45,12 +92,13 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
           { count: apptsCount, error: appError },
           { data: flowData, error: flowError }
         ] = await Promise.all([
-          // 1. Carregar resumo financeiro (usa covering index idx_transactions_tenant_unit_date)
+          // 1. Movimentações financeiras dos últimos 7 dias (usa idx_transactions_tenant_unit_date)
           supabase
             .from('transactions')
-            .select('type, amount')
+            .select('type, amount, date')
             .eq('tenant_id', activeTenant.id)
-            .eq('unit_id', selectedUnit),
+            .eq('unit_id', selectedUnit)
+            .gte('date', firstDayStr),
 
           // 2. Contar agendamentos de hoje sem trafegar todas as colunas/linhas
           supabase
@@ -84,13 +132,13 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
         if (appError) throw appError;
         if (flowError) throw flowError;
 
-        let income = 0;
-        let expense = 0;
         (txs || []).forEach((t: any) => {
-          if (t.type === 'income') income += Number(t.amount);
-          else if (t.type === 'expense') expense += Number(t.amount);
+          const day = days.find(d => d.dateStr === String(t.date).slice(0, 10));
+          if (!day) return;
+          if (t.type === 'income') day.income += Number(t.amount);
+          else if (t.type === 'expense') day.expense += Number(t.amount);
         });
-        setFinancials({ income, expense });
+        setWeekBalance(days);
 
         const activeFlow = (flowData || []).filter((f: any) => f.status === 'waiting' || f.status === 'checked_in');
         setStats(prev => ({
@@ -151,7 +199,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
     <div className={styles.container}>
       <div className={styles.titleSection}>
         <div>
-          <h1 className={styles.welcomeTitle}>Olá, Dr. Carlos!</h1>
+          <h1 className={styles.welcomeTitle}>{firstName ? `Olá, ${firstName}!` : 'Olá!'}</h1>
           <p className={styles.subtitle}>Veja como estão as atividades da sua clínica hoje.</p>
         </div>
       </div>
@@ -183,7 +231,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
             <TrendingUp size={22} />
           </div>
           <div>
-            <div className={styles.statValue}>R$ {financials.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            <div className={styles.statValue}>R$ {formatBRL(todayIncome)}</div>
             <div className={styles.statLabel}>Faturamento do Dia</div>
           </div>
         </div>
@@ -193,7 +241,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
             <Smile size={22} />
           </div>
           <div>
-            <div className={styles.statValue}>{stats.satisfactionRate}</div>
+            <div className={styles.statValue}>{satisfactionRate !== null ? satisfactionRate.toFixed(1) : '—'}</div>
             <div className={styles.statLabel}>Satisfação Média</div>
           </div>
         </div>
@@ -201,7 +249,7 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
 
       {/* Seção Principal de Conteúdo */}
       <div className={styles.contentGrid}>
-        {/* Lado Esquerdo - Gráfico Simulado & Atividades */}
+        {/* Lado Esquerdo - Gráfico Semanal & Atividades */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>
@@ -209,49 +257,41 @@ export default function Dashboard({ selectedUnit }: DashboardProps) {
               Balanço Financeiro Semanal
             </h2>
             
-            {/* Gráfico Simulado Premium */}
+            {/* Gráfico com as movimentações reais dos últimos 7 dias */}
             <div className={styles.chartContainer}>
-              <div className={styles.chartBarContainer}>
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '70%' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '30%' }}></div>
-                <span className={styles.chartLabel}>Seg</span>
-              </div>
-              <div className={styles.chartBarContainer}>
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '80%' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '40%' }}></div>
-                <span className={styles.chartLabel}>Ter</span>
-              </div>
-              <div className={styles.chartBarContainer}>
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '60%' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '25%' }}></div>
-                <span className={styles.chartLabel}>Qua</span>
-              </div>
-              <div className={styles.chartBarContainer}>
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '90%' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '35%' }}></div>
-                <span className={styles.chartLabel}>Qui</span>
-              </div>
-              <div className={styles.chartBarContainer}>
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '85%' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '50%' }}></div>
-                <span className={styles.chartLabel}>Sex</span>
-              </div>
-              <div className={styles.chartBarContainer}>
-                {/* Hoje */}
-                <div className={`${styles.chartBar} ${styles.chartBarIncome}`} style={{ height: '95%', boxShadow: '0 0 10px rgba(124,58,237,0.3)' }}></div>
-                <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: '45%' }}></div>
-                <span className={styles.chartLabel} style={{ fontWeight: '700', color: 'hsl(var(--primary))' }}>Sáb</span>
-              </div>
+              {weekBalance.map((day) => {
+                const incomeHeight = chartMax > 0 ? Math.max((day.income / chartMax) * 85, day.income > 0 ? 2 : 0) : 0;
+                const expenseHeight = chartMax > 0 ? Math.max((day.expense / chartMax) * 85, day.expense > 0 ? 2 : 0) : 0;
+                return (
+                  <div
+                    key={day.dateStr}
+                    className={styles.chartBarContainer}
+                    title={`${day.label} — Entradas: R$ ${formatBRL(day.income)} | Saídas: R$ ${formatBRL(day.expense)}`}
+                  >
+                    <div
+                      className={`${styles.chartBar} ${styles.chartBarIncome}`}
+                      style={{ height: `${incomeHeight}%`, boxShadow: day.isToday && day.income > 0 ? '0 0 10px rgba(124,58,237,0.3)' : undefined }}
+                    ></div>
+                    <div className={`${styles.chartBar} ${styles.chartBarExpense}`} style={{ height: `${expenseHeight}%` }}></div>
+                    <span
+                      className={styles.chartLabel}
+                      style={day.isToday ? { fontWeight: '700', color: 'hsl(var(--primary))' } : undefined}
+                    >
+                      {day.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             
             <div className={styles.chartLegend}>
               <div className={styles.legendItem}>
                 <div className={styles.legendColor} style={{ backgroundColor: 'hsl(var(--primary))' }}></div>
-                <span>Entradas (R$ {(financials.income).toLocaleString('pt-BR')})</span>
+                <span>Entradas (R$ {formatBRL(weekIncome)})</span>
               </div>
               <div className={styles.legendItem}>
                 <div className={styles.legendColor} style={{ backgroundColor: 'hsl(var(--danger))' }}></div>
-                <span>Saídas (R$ {(financials.expense).toLocaleString('pt-BR')})</span>
+                <span>Saídas (R$ {formatBRL(weekExpense)})</span>
               </div>
             </div>
           </div>

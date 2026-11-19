@@ -22,8 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Send,
-  ShieldCheck,
-  Link2
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useTenant } from '../contexts/TenantContext';
@@ -903,12 +902,6 @@ export default function Appointments({ selectedUnit }: AppointmentsProps) {
     }
   };
 
-  const handleGenerateLink = () => {
-    const mockLink = `https://agendar.odontomanager.com/clinica-${selectedUnit.substring(0, 6)}`;
-    navigator.clipboard.writeText(mockLink);
-    triggerToast('added', 'Link Copiado!', mockLink);
-  };
-
   // Cálculo de posicionamento (top, height, left, width) para eventos de um dia na grade horária
   const getLayoutEventsForDay = (dayDateStr: string) => {
     const dayEvents = filteredAppointments
@@ -1139,16 +1132,6 @@ export default function Appointments({ selectedUnit }: AppointmentsProps) {
               Programação
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={handleGenerateLink}
-            className={styles.secondaryBtn}
-            title="Copiar link público de agendamento"
-          >
-            <Link2 size={15} />
-            <span>Link</span>
-          </button>
 
           <button
             type="button"
